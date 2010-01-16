@@ -31,36 +31,59 @@ type omode = Oreader | Owriter | Ocreat | Otrunc | Onolck | Olcknb | Otsync
 
 type opt = Tlarge | Tdeflate | Tbzip | Ttcbs
 
+module type Tclist =
+sig
+  type t
+
+end
+
+module type Tcmap =
+sig
+  type t
+
+end
+
 module ADB :
 sig
   type t
 
-  val new_ : unit -> t
+  module type Sig =
+  sig
+    type tclist_t
 
-  val adddouble : t -> string -> float -> float
-  val addint : t -> string -> int -> int
-  val close : t -> unit
-  val copy : t -> string -> unit
-  val fwmkeys : t -> ?max:int -> string -> string list
-  val get : t -> string -> string
-  val iterinit : t -> unit
-  val iternext : t -> string
-  val misc : t -> string -> string list -> string list
-  val open_ : t -> string -> unit
-  val optimize : t -> string -> unit
-  val out : t -> string -> unit
-  val path : t -> string
-  val put : t -> string -> string -> unit
-  val putcat : t -> string -> string -> unit
-  val putkeep : t -> string -> string -> unit
-  val rnum : t -> int64
-  val size : t -> int64
-  val sync : t -> unit
-  val tranabort : t -> unit
-  val tranbegin : t -> unit
-  val trancommit : t -> unit
-  val vanish : t -> unit
-  val vsiz : t -> string -> int
+    val new_ : unit -> t
+
+    val adddouble : t -> string -> float -> float
+    val addint : t -> string -> int -> int
+    val close : t -> unit
+    val copy : t -> string -> unit
+    val fwmkeys : t -> ?max:int -> string -> tclist_t
+    val get : t -> string -> string
+    val iterinit : t -> unit
+    val iternext : t -> string
+    val misc : t -> string -> tclist_t -> tclist_t
+    val open_ : t -> string -> unit
+    val optimize : t -> string -> unit
+    val out : t -> string -> unit
+    val path : t -> string
+    val put : t -> string -> string -> unit
+    val putcat : t -> string -> string -> unit
+    val putkeep : t -> string -> string -> unit
+    val rnum : t -> int64
+    val size : t -> int64
+    val sync : t -> unit
+    val tranabort : t -> unit
+    val tranbegin : t -> unit
+    val trancommit : t -> unit
+    val vanish : t -> unit
+    val vsiz : t -> string -> int
+  end
+
+  include Sig with type tclist_t = string list
+
+  module List : Sig with type tclist_t = string list
+  module Array : Sig with type tclist_t = string array
+  module Tclist : Sig with type tclist_t = Tclist.t
 end
 
 module BDB :
@@ -69,40 +92,51 @@ sig
 
   type t
 
-  val new_ : unit -> t
+  module type Sig =
+  sig
+    type tclist_t
 
-  val adddouble : t -> string -> float -> float
-  val addint : t -> string -> int -> int
-  val close : t -> unit
-  val copy : t -> string -> unit
-  val fsiz : t -> int64
-  val fwmkeys : t -> ?max:int -> string -> string list
-  val get : t -> string -> string
-  val getlist : t -> string -> string list
-  val open_ : t -> ?mode:omode list -> string -> unit
-  val optimize : t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-  val out : t -> string -> unit
-  val outlist : t -> string -> unit
-  val path : t -> string
-  val put : t -> string -> string -> unit
-  val putcat : t -> string -> string -> unit
-  val putdup : t -> string -> string -> unit
-  val putkeep : t -> string -> string -> unit
-  val putlist : t -> string -> string list -> unit
-  val range : t -> ?bkey:string -> ?binc:bool -> ?ekey:string -> ?einc:bool -> ?max:int -> string list
-  val rnum : t -> int64
-  val setcache : t -> ?lcnum:int -> ?ncnum:int -> unit -> unit
-  val setcmpfunc : t -> cmpfunc -> unit
-  val setdfunit : t -> int32 -> unit
-  val setxmsiz : t -> int64 -> unit
-  val sync : t -> unit
-  val tranabort : t -> unit
-  val tranbegin : t -> unit
-  val trancommit : t -> unit
-  val tune : t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-  val vanish : t -> unit
-  val vnum : t -> string -> int
-  val vsiz : t -> string -> int
+    val new_ : unit -> t
+
+    val adddouble : t -> string -> float -> float
+    val addint : t -> string -> int -> int
+    val close : t -> unit
+    val copy : t -> string -> unit
+    val fsiz : t -> int64
+    val fwmkeys : t -> ?max:int -> string -> tclist_t
+    val get : t -> string -> string
+    val getlist : t -> string -> tclist_t
+    val open_ : t -> ?mode:omode list -> string -> unit
+    val optimize : t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
+    val out : t -> string -> unit
+    val outlist : t -> string -> unit
+    val path : t -> string
+    val put : t -> string -> string -> unit
+    val putcat : t -> string -> string -> unit
+    val putdup : t -> string -> string -> unit
+    val putkeep : t -> string -> string -> unit
+    val putlist : t -> string -> tclist_t -> unit
+    val range : t -> ?bkey:string -> ?binc:bool -> ?ekey:string -> ?einc:bool -> ?max:int -> tclist_t
+    val rnum : t -> int64
+    val setcache : t -> ?lcnum:int -> ?ncnum:int -> unit -> unit
+    val setcmpfunc : t -> cmpfunc -> unit
+    val setdfunit : t -> int32 -> unit
+    val setxmsiz : t -> int64 -> unit
+    val sync : t -> unit
+    val tranabort : t -> unit
+    val tranbegin : t -> unit
+    val trancommit : t -> unit
+    val tune : t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
+    val vanish : t -> unit
+    val vnum : t -> string -> int
+    val vsiz : t -> string -> int
+  end
+
+  include Sig with type tclist_t = string list
+
+  module List : Sig with type tclist_t = string list
+  module Array : Sig with type tclist_t = string array
+  module Tclist : Sig with type tclist_t = Tclist.t
 end
 
 module BDBCUR :
@@ -133,68 +167,90 @@ sig
 
   type t
 
-  val new_ : unit -> t
+  module type Sig =
+  sig
+    type tclist_t
 
-  val adddouble : t -> string -> float -> float
-  val addint : t -> string -> int -> int
-  val close : t -> unit
-  val copy : t -> string -> unit
-  val fsiz : t -> int64
-  val get : t -> int64 -> string
-  val iterinit : t -> unit
-  val iternext : t -> int64
-  val open_ : t -> ?omode:omode list -> string -> unit
-  val optimize : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit
-  val out : t -> int64 -> unit
-  val path : t -> string
-  val put : t -> int64 -> string -> unit
-  val putcat : t -> int64 -> string -> unit
-  val putkeep : t -> int64 -> string -> unit
-  val range : t -> ?max:int -> string -> string list
-  val rnum : t -> int64
-  val sync : t -> unit
-  val tranabort : t -> unit
-  val tranbegin : t -> unit
-  val trancommit : t -> unit
-  val tune : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit
-  val vanish : t -> unit
-  val vsiz : t -> int64 -> int
+    val new_ : unit -> t
+
+    val adddouble : t -> string -> float -> float
+    val addint : t -> string -> int -> int
+    val close : t -> unit
+    val copy : t -> string -> unit
+    val fsiz : t -> int64
+    val get : t -> int64 -> string
+    val iterinit : t -> unit
+    val iternext : t -> int64
+    val open_ : t -> ?omode:omode list -> string -> unit
+    val optimize : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit
+    val out : t -> int64 -> unit
+    val path : t -> string
+    val put : t -> int64 -> string -> unit
+    val putcat : t -> int64 -> string -> unit
+    val putkeep : t -> int64 -> string -> unit
+    val range : t -> ?max:int -> string -> tclist_t
+    val rnum : t -> int64
+    val sync : t -> unit
+    val tranabort : t -> unit
+    val tranbegin : t -> unit
+    val trancommit : t -> unit
+    val tune : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit
+    val vanish : t -> unit
+    val vsiz : t -> int64 -> int
+  end
+
+  include Sig with type tclist_t = string list
+
+  module List : Sig with type tclist_t = string list
+  module Array : Sig with type tclist_t = string array
+  module Tclist : Sig with type tclist_t = Tclist.t
 end
 
 module HDB :
 sig
   type t
 
-  val new_ : unit -> t
+  module type Sig =
+  sig
+    type tclist_t
 
-  val adddouble : t -> string -> float -> float
-  val addint : t -> string -> int -> int
-  val close : t -> unit
-  val copy : t -> string -> unit
-  val fsiz : t -> int64
-  val fwmkeys : t -> ?max:int -> string -> string list
-  val get : t -> string -> string
-  val iterinit : t -> unit
-  val iternext : t -> string
-  val open_ : t -> ?omode:omode list -> string -> unit
-  val optimize : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-  val out : t -> string -> unit
-  val path : t -> string
-  val put : t -> string -> string -> unit
-  val putasync : t -> string -> string -> unit
-  val putcat : t -> string -> string -> unit
-  val putkeep : t -> string -> string -> unit
-  val rnum : t -> int64
-  val setcache : t -> int32 -> unit
-  val setdfunit : t -> int32 -> unit
-  val setxmsiz : t -> int64 -> unit
-  val sync : t -> unit
-  val tranabort : t -> unit
-  val tranbegin : t -> unit
-  val trancommit : t -> unit
-  val tune : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-  val vanish : t -> unit
-  val vsiz : t -> string -> int
+    val new_ : unit -> t
+
+    val adddouble : t -> string -> float -> float
+    val addint : t -> string -> int -> int
+    val close : t -> unit
+    val copy : t -> string -> unit
+    val fsiz : t -> int64
+    val fwmkeys : t -> ?max:int -> string -> tclist_t
+    val get : t -> string -> string
+    val iterinit : t -> unit
+    val iternext : t -> string
+    val open_ : t -> ?omode:omode list -> string -> unit
+    val optimize : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
+    val out : t -> string -> unit
+    val path : t -> string
+    val put : t -> string -> string -> unit
+    val putasync : t -> string -> string -> unit
+    val putcat : t -> string -> string -> unit
+    val putkeep : t -> string -> string -> unit
+    val rnum : t -> int64
+    val setcache : t -> int32 -> unit
+    val setdfunit : t -> int32 -> unit
+    val setxmsiz : t -> int64 -> unit
+    val sync : t -> unit
+    val tranabort : t -> unit
+    val tranbegin : t -> unit
+    val trancommit : t -> unit
+    val tune : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
+    val vanish : t -> unit
+    val vsiz : t -> string -> int
+  end
+
+  include Sig with type tclist_t = string list
+
+  module List : Sig with type tclist_t = string list
+  module Array : Sig with type tclist_t = string array
+  module Tclist : Sig with type tclist_t = Tclist.t
 end
 
 module TDB :
@@ -203,37 +259,49 @@ sig
 
   type t
 
-  val new_ : unit -> t
+  module type Sig =
+  sig
+    type tclist_t
+    type tcmap_t
 
-  val adddouble : t -> string -> float -> float
-  val addint : t -> string -> int -> int
-  val close : t -> unit
-  val copy : t -> string -> unit
-  val fsiz : t -> int64
-  val fwmkeys : t -> ?max:int -> string -> string list
-  val genuid : t -> int64
-  val get : t -> string -> (string * string) list
-  val iterinit : t -> unit
-  val iternext : t -> string
-  val open_ : t -> ?omode:omode list -> string -> unit
-  val optimize : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-  val out : t -> string -> unit
-  val path : t -> string
-  val put : t -> string -> (string * string) list -> unit
-  val putcat : t -> string -> (string * string) list -> unit
-  val putkeep : t -> string -> (string * string) list -> unit
-  val rnum : t -> int64
-  val setcache : t -> ?rcnum:int32 -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit
-  val setdfunit : t -> int32 -> unit
-  val setindex : t -> string -> itype -> unit
-  val setxmsiz : t -> int64 -> unit
-  val sync : t -> unit
-  val tranabort : t -> unit
-  val tranbegin : t -> unit
-  val trancommit : t -> unit
-  val tune : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-  val vanish : t -> unit
-  val vsiz : t -> string -> int
+    val new_ : unit -> t
+
+    val adddouble : t -> string -> float -> float
+    val addint : t -> string -> int -> int
+    val close : t -> unit
+    val copy : t -> string -> unit
+    val fsiz : t -> int64
+    val fwmkeys : t -> ?max:int -> string -> tclist_t
+    val genuid : t -> int64
+    val get : t -> string -> tcmap_t
+    val iterinit : t -> unit
+    val iternext : t -> string
+    val open_ : t -> ?omode:omode list -> string -> unit
+    val optimize : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
+    val out : t -> string -> unit
+    val path : t -> string
+    val put : t -> string -> tcmap_t -> unit
+    val putcat : t -> string -> tcmap_t -> unit
+    val putkeep : t -> string -> tcmap_t -> unit
+    val rnum : t -> int64
+    val setcache : t -> ?rcnum:int32 -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit
+    val setdfunit : t -> int32 -> unit
+    val setindex : t -> string -> itype -> unit
+    val setxmsiz : t -> int64 -> unit
+    val sync : t -> unit
+    val tranabort : t -> unit
+    val tranbegin : t -> unit
+    val trancommit : t -> unit
+    val tune : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
+    val vanish : t -> unit
+    val vsiz : t -> string -> int
+  end
+
+  include Sig with type tclist_t = string list and type tcmap_t = (string * string) list
+
+  module List : Sig with type tclist_t = string list and type tcmap_t = (string * string) list
+  module Array : Sig with type tclist_t = string array and type tcmap_t = (string * string) array
+  module Tclist : Sig with type tclist_t = Tclist.t and type tcmap_t = Tcmap.t
 end
 
 module TDBQRY :
@@ -253,15 +321,27 @@ sig
 
   type t
 
-  val new_ : TDB.t -> t
+  module type Sig =
+  sig
+    type tclist_t
+    type tcmap_t
 
-  val addcond : t -> string -> ?negate:bool -> ?noidx:bool -> qcond -> string -> unit
-  val hint : t -> string
-  val kwic : t -> ?name:string -> ?width:int -> ?opts:kopt list -> (string * string) list -> string list
-  val metasearch : t -> ?setop:msetop -> t list -> string list
-  val proc : t -> (string -> (string * string) list -> qpost list) -> unit
-  val search : t -> string list
-  val searchout : t -> unit
-  val setlimit : t -> ?max:int -> ?skip:int -> unit -> unit
-  val setorder : t -> string -> qord -> unit
+    val new_ : TDB.t -> t
+
+    val addcond : t -> string -> ?negate:bool -> ?noidx:bool -> qcond -> string -> unit
+    val hint : t -> string
+    val kwic : t -> ?name:string -> ?width:int -> ?opts:kopt list -> tcmap_t -> tclist_t
+    val metasearch : t -> ?setop:msetop -> t list -> tclist_t
+    val proc : t -> (string -> tcmap_t -> qpost list) -> unit
+    val search : t -> tclist_t
+    val searchout : t -> unit
+    val setlimit : t -> ?max:int -> ?skip:int -> unit -> unit
+    val setorder : t -> string -> qord -> unit
+  end
+
+  include Sig with type tclist_t = string list and type tcmap_t = (string * string) list
+
+  module List : Sig with type tclist_t = string list and type tcmap_t = (string * string) list
+  module Array : Sig with type tclist_t = string array and type tcmap_t = (string * string) array
+  module Tclist : Sig with type tclist_t = Tclist.t and type tcmap_t = Tcmap.t
 end

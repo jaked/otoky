@@ -31,36 +31,156 @@ type omode = Oreader | Owriter | Ocreat | Otrunc | Onolck | Olcknb | Otsync
 
 type opt = Tlarge | Tdeflate | Tbzip | Ttcbs
 
+module type Tclist =
+sig
+  type t
+
+end
+
+module type Tcmap =
+sig
+  type t
+
+end
+
+module type Tclist_t =
+sig
+  type t
+
+  val decode : Tclist.t -> t
+  val encode : t -> Tclist.t
+end
+
+module type Tcmap_t =
+sig
+  type t
+
+  val decode : Tcmap.t -> t
+  val encode : t -> Tcmap.t
+end
+
+module Tclist_list =
+struct
+  type t = string list
+
+  let decode tc = failwith "unimplemented"
+  let encode t = failwith "unimplemented"
+end
+
+module Tclist_array =
+struct
+  type t = string array
+
+  let decode tc = failwith "unimplemented"
+  let encode t = failwith "unimplemented"
+end
+
+module Tclist_tclist =
+struct
+  type t = Tclist.t
+
+  external decode : Tclist.t -> t = "%identity"
+  external encode : t -> Tclist.t = "%identity"
+end
+
+module Tcmap_list =
+struct
+  type t = (string * string) list
+
+  let decode tc = failwith "unimplemented"
+  let encode t = failwith "unimplemented"
+end
+
+module Tcmap_array =
+struct
+  type t = (string * string) array
+
+  let decode tc = failwith "unimplemented"
+  let encode t = failwith "unimplemented"
+end
+
+module Tcmap_tcmap =
+struct
+  type t = Tcmap.t
+
+  external decode : Tcmap.t -> t = "%identity"
+  external encode : t -> Tcmap.t = "%identity"
+end
+
 module ADB =
 struct
   type t
 
-  external new_ : unit -> t = "otoky_adb_new"
+  module type Sig =
+  sig
+    type tclist_t
 
-  external adddouble : t -> string -> float -> float = "otoky_adb_adddouble"
-  external addint : t -> string -> int -> int = "otoky_adb_addint"
-  external close : t -> unit = "otoky_adb_close"
-  external copy : t -> string -> unit = "otoky_adb_copy"
-  external fwmkeys : t -> ?max:int -> string -> string list = "otoky_adb_fwmkeys"
-  let get t key = failwith "unimplemented"
-  let iterinit t = failwith "unimplemented"
-  let iternext t = failwith "unimplemented"
-  let misc t name args = failwith "unimplemented"
-  let open_ t name = failwith "unimplemented"
-  let optimize t params = failwith "unimplemented"
-  let out t key = failwith "unimplemented"
-  let path t = failwith "unimplemented"
-  let put t key value = failwith "unimplemented"
-  let putcat t key value = failwith "unimplemented"
-  let putkeep t key value = failwith "unimplemented"
-  let rnum t = failwith "unimplemented"
-  let size t = failwith "unimplemented"
-  let sync t = failwith "unimplemented"
-  let tranabort t = failwith "unimplemented"
-  let tranbegin t = failwith "unimplemented"
-  let trancommit t = failwith "unimplemented"
-  let vanish t = failwith "unimplemented"
-  let vsiz t key = failwith "unimplemented"
+    val new_ : unit -> t
+
+    val adddouble : t -> string -> float -> float
+    val addint : t -> string -> int -> int
+    val close : t -> unit
+    val copy : t -> string -> unit
+    val fwmkeys : t -> ?max:int -> string -> tclist_t
+    val get : t -> string -> string
+    val iterinit : t -> unit
+    val iternext : t -> string
+    val misc : t -> string -> tclist_t -> tclist_t
+    val open_ : t -> string -> unit
+    val optimize : t -> string -> unit
+    val out : t -> string -> unit
+    val path : t -> string
+    val put : t -> string -> string -> unit
+    val putcat : t -> string -> string -> unit
+    val putkeep : t -> string -> string -> unit
+    val rnum : t -> int64
+    val size : t -> int64
+    val sync : t -> unit
+    val tranabort : t -> unit
+    val tranbegin : t -> unit
+    val trancommit : t -> unit
+    val vanish : t -> unit
+    val vsiz : t -> string -> int
+  end
+
+  module Fun (Tcl : Tclist_t) =
+  struct
+    external new_ : unit -> t = "otoky_adb_new"
+
+    external adddouble : t -> string -> float -> float = "otoky_adb_adddouble"
+    external addint : t -> string -> int -> int = "otoky_adb_addint"
+    external close : t -> unit = "otoky_adb_close"
+    external copy : t -> string -> unit = "otoky_adb_copy"
+
+    external _fwmkeys : t -> ?max:int -> string -> tclist = "otoky_adb_fwmkeys"
+    let fwmkeys t ?max prefix = Tcl.decode (_fwmkeys t ?max prefix)
+
+    let get t key = failwith "unimplemented"
+    let iterinit t = failwith "unimplemented"
+    let iternext t = failwith "unimplemented"
+    let misc t name args = failwith "unimplemented"
+    let open_ t name = failwith "unimplemented"
+    let optimize t params = failwith "unimplemented"
+    let out t key = failwith "unimplemented"
+    let path t = failwith "unimplemented"
+    let put t key value = failwith "unimplemented"
+    let putcat t key value = failwith "unimplemented"
+    let putkeep t key value = failwith "unimplemented"
+    let rnum t = failwith "unimplemented"
+    let size t = failwith "unimplemented"
+    let sync t = failwith "unimplemented"
+    let tranabort t = failwith "unimplemented"
+    let tranbegin t = failwith "unimplemented"
+    let trancommit t = failwith "unimplemented"
+    let vanish t = failwith "unimplemented"
+    let vsiz t key = failwith "unimplemented"
+  end
+
+  module List = Fun (Tclist_list)
+  module Array = Fun (Tclist_array)
+  module Tclist = Fun (Tclist_tclist)
+
+  include List
 end
 
 module BDB =
