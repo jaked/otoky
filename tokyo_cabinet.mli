@@ -31,17 +31,48 @@ type omode = Oreader | Owriter | Ocreat | Otrunc | Onolck | Olcknb | Otsync
 
 type opt = Tlarge | Tdeflate | Tbzip | Ttcbs
 
-module type Tclist =
+module Tclist :
+sig
+  type t
+
+(*
+  external del : t -> unit = "otoky_tclist_del"
+  external num : t -> int = "otoky_tclist_num"
+  external val_ : t -> int -> string = "otoky_tclist_val"
+*)
+end
+
+module Tcmap :
 sig
   type t
 
 end
 
-module type Tcmap =
+module type Tclist_t =
 sig
   type t
 
+  val of_tclist : Tclist.t -> t
+  val to_tclist : t -> Tclist.t
 end
+
+module type Tcmap_t =
+sig
+  type t
+
+  val of_tcmap : Tcmap.t -> t
+  val to_tcmap : t -> Tcmap.t
+end
+
+module Tclist_list : Tclist_t with type t = string list
+module Tclist_array : Tclist_t with type t = string array
+module Tclist_tclist : Tclist_t with type t = Tclist.t
+
+module Tcmap_list : Tcmap_t with type t = (string * string) list
+module Tcmap_array : Tcmap_t with type t = (string * string) array
+module Tcmap_hashtbl : Tcmap_t with type t = (string, string) Hashtbl.t
+module Tcmap_tcmap : Tcmap_t with type t = Tcmap.t
+
 
 module ADB :
 sig
@@ -81,9 +112,7 @@ sig
 
   include Sig with type tclist_t = string list
 
-  module List : Sig with type tclist_t = string list
-  module Array : Sig with type tclist_t = string array
-  module Tclist : Sig with type tclist_t = Tclist.t
+  module Fun (Tcl : Tclist_t) : Sig with type tclist_t = Tcl.t
 end
 
 module BDB :
@@ -134,9 +163,7 @@ sig
 
   include Sig with type tclist_t = string list
 
-  module List : Sig with type tclist_t = string list
-  module Array : Sig with type tclist_t = string array
-  module Tclist : Sig with type tclist_t = Tclist.t
+  module Fun (Tcl : Tclist_t) : Sig with type tclist_t = Tcl.t
 end
 
 module BDBCUR :
@@ -201,9 +228,7 @@ sig
 
   include Sig with type tclist_t = string list
 
-  module List : Sig with type tclist_t = string list
-  module Array : Sig with type tclist_t = string array
-  module Tclist : Sig with type tclist_t = Tclist.t
+  module Fun (Tcl : Tclist_t) : Sig with type tclist_t = Tcl.t
 end
 
 module HDB :
@@ -248,9 +273,7 @@ sig
 
   include Sig with type tclist_t = string list
 
-  module List : Sig with type tclist_t = string list
-  module Array : Sig with type tclist_t = string array
-  module Tclist : Sig with type tclist_t = Tclist.t
+  module Fun (Tcl : Tclist_t) : Sig with type tclist_t = Tcl.t
 end
 
 module TDB :
@@ -299,9 +322,7 @@ sig
 
   include Sig with type tclist_t = string list and type tcmap_t = (string * string) list
 
-  module List : Sig with type tclist_t = string list and type tcmap_t = (string * string) list
-  module Array : Sig with type tclist_t = string array and type tcmap_t = (string * string) array
-  module Tclist : Sig with type tclist_t = Tclist.t and type tcmap_t = Tcmap.t
+  module Fun (Tcl : Tclist_t) (Tcm : Tcmap_t) : Sig with type tclist_t = Tcl.t and type tcmap_t = Tcm.t
 end
 
 module TDBQRY :
@@ -341,7 +362,5 @@ sig
 
   include Sig with type tclist_t = string list and type tcmap_t = (string * string) list
 
-  module List : Sig with type tclist_t = string list and type tcmap_t = (string * string) list
-  module Array : Sig with type tclist_t = string array and type tcmap_t = (string * string) array
-  module Tclist : Sig with type tclist_t = Tclist.t and type tcmap_t = Tcmap.t
+  module Fun (Tcl : Tclist_t) (Tcm : Tcmap_t) : Sig with type tclist_t = Tcl.t and type tcmap_t = Tcm.t
 end

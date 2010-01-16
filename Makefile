@@ -19,9 +19,9 @@ C_OBJS=\
 CAML_OBJS=\
   tokyo_cabinet.cmo
 
-all: libotoky.a otoky.cma
+all: libotoky.a tokyo_cabinet.cmi otoky.cma
 
-opt: libotoky.a otoky.cmxa
+opt: libotoky.a tokyo_cabinet.cmi otoky.cmxa
 
 libotoky.a: $(C_OBJS)
 	$(MKLIB) -o otoky $(C_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
