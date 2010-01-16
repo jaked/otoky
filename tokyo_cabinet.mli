@@ -1,5 +1,32 @@
 val version : unit -> string
 
+type error =
+    | Ethread
+    | Einvalid
+    | Enofile
+    | Enoperm
+    | Emeta
+    | Erhead
+    | Eopen
+    | Eclose
+    | Etrunc
+    | Esync
+    | Estat
+    | Eseek
+    | Eread
+    | Ewrite
+    | Emmap
+    | Elock
+    | Eunlink
+    | Erename
+    | Emkdir
+    | Ermdir
+    | Ekeep
+    | Enorec
+    | Emisc
+
+exception Error of error * string
+
 type omode = Oreader | Owriter | Ocreat | Otrunc | Onolck | Olcknb | Otsync
 
 type opt = Tlarge | Tdeflate | Tbzip | Ttcbs
@@ -99,7 +126,10 @@ end
 
 module FDB :
 sig
-  type id = Id_min | Id_max | Id_prev | Id_next | Id of int64
+  val id_min : int64
+  val id_prev : int64
+  val id_max : int64
+  val id_next : int64
 
   type t
 
@@ -120,7 +150,7 @@ sig
   val put : t -> int64 -> string -> unit
   val putcat : t -> int64 -> string -> unit
   val putkeep : t -> int64 -> string -> unit
-  val range : t -> string -> int -> string list
+  val range : t -> ?max:int -> string -> string list
   val rnum : t -> int64
   val sync : t -> unit
   val tranabort : t -> unit
@@ -129,8 +159,6 @@ sig
   val tune : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit
   val vanish : t -> unit
   val vsiz : t -> int64 -> int
-
-  val id : id -> int64
 end
 
 module HDB :
@@ -187,7 +215,7 @@ sig
   val get : t -> string -> (string * string) list
   val iterinit : t -> unit
   val iternext : t -> string
-  val open_ : t -> string -> unit
+  val open_ : t -> ?omode:omode list -> string -> unit
   val optimize : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
   val out : t -> string -> unit
   val path : t -> string
@@ -195,7 +223,7 @@ sig
   val putcat : t -> string -> (string * string) list -> unit
   val putkeep : t -> string -> (string * string) list -> unit
   val rnum : t -> int64
-  val setcache : t -> int32 -> unit
+  val setcache : t -> ?rcnum:int32 -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit
   val setdfunit : t -> int32 -> unit
   val setindex : t -> string -> itype -> unit
   val setxmsiz : t -> int64 -> unit
@@ -221,7 +249,7 @@ sig
 
   type msetop = Ms_union | Ms_isect | Ms_diff
 
-  type kwic = Kw_mutab | Kw_muctrl | Kw_mubrct | Kw_noover | Kw_pulead
+  type kopt = Kw_mutab | Kw_muctrl | Kw_mubrct | Kw_noover | Kw_pulead
 
   type t
 
@@ -229,11 +257,11 @@ sig
 
   val addcond : t -> string -> ?negate:bool -> ?noidx:bool -> qcond -> string -> unit
   val hint : t -> string
-  val kwic : t -> (string * string) list -> string -> int -> kwic list -> string list
-  val metaseach : t list -> msetop -> string list
+  val kwic : t -> ?name:string -> ?width:int -> ?opts:kopt list -> (string * string) list -> string list
+  val metasearch : t -> ?setop:msetop -> t list -> string list
   val proc : t -> (string -> (string * string) list -> qpost list) -> unit
   val search : t -> string list
   val searchout : t -> unit
-  val setlimit : t -> int -> int -> unit
+  val setlimit : t -> ?max:int -> ?skip:int -> unit -> unit
   val setorder : t -> string -> qord -> unit
 end
