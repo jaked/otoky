@@ -35,6 +35,20 @@ module Tclist =
 struct
   type t
 
+  external new_ : ?anum:int -> unit -> t = "otoky_tclist_new"
+  external del : t -> unit = "otoky_tclist_del"
+  external num : t -> int = "otoky_tclist_num"
+  external val_ : t -> int -> int ref -> string = "otoky_tclist_val"
+  external push : t -> string -> unit = "otoky_tclist_push"
+  external lsearch : t -> string -> int = "otoky_tclist_lsearch"
+  external bsearch : t -> string -> int = "otoky_tclist_bsearch"
+
+  let copy_val tclist k =
+    let len = ref 0 in
+    let s = val_ tclist k len in
+    let r = String.create !len in
+    String.unsafe_blit s 0 r 0 !len;
+    r
 end
 
 module Tcmap =
@@ -47,6 +61,8 @@ module type Tclist_t =
 sig
   type t
 
+  val del : bool
+
   val of_tclist : Tclist.t -> t
   val to_tclist : t -> Tclist.t
 end
@@ -54,6 +70,8 @@ end
 module type Tcmap_t =
 sig
   type t
+
+  val del : bool
 
   val of_tcmap : Tcmap.t -> t
   val to_tcmap : t -> Tcmap.t
@@ -63,21 +81,44 @@ module Tclist_list =
 struct
   type t = string list
 
-  let of_tclist tc = failwith "unimplemented"
-  let to_tclist t = failwith "unimplemented"
+  let del = true
+
+  let of_tclist tclist =
+    let num = Tclist.num tclist in
+    let rec loop k =
+      if k = num
+      then []
+      else Tclist.copy_val tclist k :: loop (k + 1) in
+    loop 0
+
+  let to_tclist t =
+    let anum = List.length t in
+    let tclist = Tclist.new_ ~anum () in
+    List.iter (Tclist.push tclist) t;
+    tclist
 end
 
 module Tclist_array =
 struct
   type t = string array
 
-  let of_tclist tc = failwith "unimplemented"
-  let to_tclist t = failwith "unimplemented"
+  let del = true
+
+  let of_tclist tclist =
+    Array.init (Tclist.num tclist) (Tclist.copy_val tclist)
+
+  let to_tclist t =
+    let anum = Array.length t in
+    let tclist = Tclist.new_ ~anum () in
+    Array.iter (Tclist.push tclist) t;
+    tclist
 end
 
 module Tclist_tclist =
 struct
   type t = Tclist.t
+
+  let del = false
 
   external of_tclist : Tclist.t -> t = "%identity"
   external to_tclist : t -> Tclist.t = "%identity"
@@ -87,7 +128,9 @@ module Tcmap_list =
 struct
   type t = (string * string) list
 
-  let of_tcmap tc = failwith "unimplemented"
+  let del = true
+
+  let of_tcmap tcmap = failwith "unimplemented"
   let to_tcmap t = failwith "unimplemented"
 end
 
@@ -95,7 +138,9 @@ module Tcmap_array =
 struct
   type t = (string * string) array
 
-  let of_tcmap tc = failwith "unimplemented"
+  let del = true
+
+  let of_tcmap tcmap = failwith "unimplemented"
   let to_tcmap t = failwith "unimplemented"
 end
 
@@ -103,13 +148,17 @@ module Tcmap_hashtbl =
 struct
   type t = (string, string) Hashtbl.t
 
-  let of_tcmap tc = failwith "unimplemented"
+  let del = true
+
+  let of_tcmap tcmap = failwith "unimplemented"
   let to_tcmap t = failwith "unimplemented"
 end
 
 module Tcmap_tcmap =
 struct
   type t = Tcmap.t
+
+  let del = false
 
   external of_tcmap : Tcmap.t -> t = "%identity"
   external to_tcmap : t -> Tcmap.t = "%identity"
@@ -163,7 +212,11 @@ struct
     external copy : t -> string -> unit = "otoky_adb_copy"
 
     external _fwmkeys : t -> ?max:int -> string -> Tclist.t = "otoky_adb_fwmkeys"
-    let fwmkeys t ?max prefix = Tcl.of_tclist (_fwmkeys t ?max prefix)
+    let fwmkeys t ?max prefix =
+      let tclist = _fwmkeys t ?max prefix in
+      let t = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      t
 
     let get t key = failwith "unimplemented"
     let iterinit t = failwith "unimplemented"

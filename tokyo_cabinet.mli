@@ -35,22 +35,32 @@ module Tclist :
 sig
   type t
 
-(*
+  external new_ : ?anum:int -> unit -> t = "otoky_tclist_new"
   external del : t -> unit = "otoky_tclist_del"
   external num : t -> int = "otoky_tclist_num"
-  external val_ : t -> int -> string = "otoky_tclist_val"
-*)
+  external val_ : t -> int -> int ref -> string = "otoky_tclist_val"
+  external push : t -> string -> unit = "otoky_tclist_push"
+  external lsearch : t -> string -> int = "otoky_tclist_lsearch"
+  external bsearch : t -> string -> int = "otoky_tclist_bsearch"
+
+  val copy_val : t -> int -> string
 end
 
 module Tcmap :
 sig
   type t
 
+(*
+  external del : t -> unit = "otoky_tcmap_del"
+  
+*)
 end
 
 module type Tclist_t =
 sig
   type t
+
+  val del : bool
 
   val of_tclist : Tclist.t -> t
   val to_tclist : t -> Tclist.t
@@ -59,6 +69,8 @@ end
 module type Tcmap_t =
 sig
   type t
+
+  val del : bool
 
   val of_tcmap : Tcmap.t -> t
   val to_tcmap : t -> Tcmap.t

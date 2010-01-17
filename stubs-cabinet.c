@@ -33,6 +33,59 @@ static value alloc_handle(void *p, close_fn close)
   return v;
 }
 
+CAMLprim
+TCLIST *otoky_tclist_new(value vanum, value vunit)
+{
+  int anum = int_option(vanum);
+  TCLIST *tclist;
+  if (anum == -1)
+    tclist = tclistnew();
+  else
+    tclist = tclistnew2(anum);
+  return tclist;
+}
+
+CAMLprim
+value otoky_tclist_del(TCLIST *tclist)
+{
+  tclistdel(tclist);
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_tclist_num(TCLIST *tclist)
+{
+  return Val_int(tclistnum(tclist));
+}
+
+CAMLprim
+const void *otoky_tclist_val(TCLIST *tclist, value vindex, value vsp)
+{
+  int sp;
+  const void *val = tclistval(tclist, Int_val(vindex), &sp);
+  Field(vsp, 0) = Val_int(sp);
+  return val;
+}
+
+CAMLprim
+value otoky_tclist_push(TCLIST *tclist, value vstring)
+{
+  tclistpush(tclist, String_val(vstring), caml_string_length(vstring));
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_tclist_lsearch(TCLIST *tclist, value vstring)
+{
+  return Val_int(tclistlsearch(tclist, String_val(vstring), caml_string_length(vstring)));
+}
+
+CAMLprim
+value otoky_tclist_bsearch(TCLIST *tclist, value vstring)
+{
+  return Val_int(tclistbsearch(tclist, String_val(vstring), caml_string_length(vstring)));
+}
+
 static void adb_error(TCADB *adb, char *fn_name)
 {
   /* XXX */
