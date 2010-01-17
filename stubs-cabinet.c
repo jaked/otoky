@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <caml/mlvalues.h>
 #include <caml/alloc.h>
 #include <caml/callback.h>
@@ -6,10 +8,6 @@
 #include <caml/signals.h>
 
 #include <tcadb.h>
-
-static value tclist_to_list(TCLIST *list) {
-  return Val_int(0); /* XXX */
-}
 
 #define int_option(v) ((v == Val_int(0)) ? -1 : Int_val(Field(v, 0)))
 
@@ -31,6 +29,13 @@ static value alloc_handle(void *p, close_fn close)
   Field(v, 0) = (value)p;
   Field(v, 1) = (value)close;
   return v;
+}
+
+static value copy_string_len(void *s, int len)
+{
+  value res = caml_alloc_string(len);
+  memmove(String_val(res), s, len);
+  return res;
 }
 
 CAMLprim
@@ -59,11 +64,11 @@ value otoky_tclist_num(TCLIST *tclist)
 }
 
 CAMLprim
-const void *otoky_tclist_val(TCLIST *tclist, value vindex, value vsp)
+const void *otoky_tclist_val(TCLIST *tclist, value vindex, value vlen)
 {
-  int sp;
-  const void *val = tclistval(tclist, Int_val(vindex), &sp);
-  Field(vsp, 0) = Val_int(sp);
+  int len;
+  const void *val = tclistval(tclist, Int_val(vindex), &len);
+  Field(vlen, 0) = Val_int(len);
   return val;
 }
 
@@ -157,15 +162,28 @@ value otoky_adb_copy(value vadb, value vpath)
 }
 
 CAMLprim
-value otoky_adb_fwmkeys(value vadb, value vmax, value vprefix)
+TCLIST *otoky_adb_fwmkeys(value vadb, value vmax, value vprefix)
 {
   TCADB *adb = adb_val(vadb);
-  TCLIST *keys;
-  value r;
+  TCLIST *tclist;
   caml_enter_blocking_section();
-  keys = tcadbfwmkeys(adb, String_val(vprefix), caml_string_length(vprefix), int_option(vmax));
+  tclist = tcadbfwmkeys(adb, String_val(vprefix), caml_string_length(vprefix), int_option(vmax));
   caml_leave_blocking_section();
-  r = tclist_to_list(keys);
-  tclistdel(keys);
-  return r;
+  return tclist;
+}
+
+CAMLprim
+value otoky_adb_get(value vadb, value vkey)
+{
+  TCADB *adb = adb_val(vadb);
+  void *val;
+  int len;
+  value vval;
+  caml_enter_blocking_section();
+  val = tcadbget(adb, String_val(vkey), caml_string_length(vkey), &len);
+  caml_leave_blocking_section();
+  if (!val) caml_raise_not_found ();
+  vval = copy_string_len(val, len);
+  tcfree(val);
+  return vval;
 }

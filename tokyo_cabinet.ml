@@ -218,7 +218,8 @@ struct
       if Tcl.del then Tclist.del tclist;
       t
 
-    let get t key = failwith "unimplemented"
+    external get : t -> string -> string = "otoky_adb_get"
+
     let iterinit t = failwith "unimplemented"
     let iternext t = failwith "unimplemented"
     let misc t name args = failwith "unimplemented"
