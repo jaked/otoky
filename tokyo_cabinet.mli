@@ -106,7 +106,7 @@ sig
     val iternext : t -> string
     val misc : t -> string -> tclist_t -> tclist_t
     val open_ : t -> string -> unit
-    val optimize : t -> string -> unit
+    val optimize : t -> ?params:string -> unit -> unit
     val out : t -> string -> unit
     val path : t -> string
     val put : t -> string -> string -> unit

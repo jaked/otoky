@@ -184,7 +184,7 @@ struct
     val iternext : t -> string
     val misc : t -> string -> tclist_t -> tclist_t
     val open_ : t -> string -> unit
-    val optimize : t -> string -> unit
+    val optimize : t -> ?params:string -> unit -> unit
     val out : t -> string -> unit
     val path : t -> string
     val put : t -> string -> string -> unit
@@ -214,30 +214,37 @@ struct
     external _fwmkeys : t -> ?max:int -> string -> Tclist.t = "otoky_adb_fwmkeys"
     let fwmkeys t ?max prefix =
       let tclist = _fwmkeys t ?max prefix in
-      let t = Tcl.of_tclist tclist in
+      let r = Tcl.of_tclist tclist in
       if Tcl.del then Tclist.del tclist;
-      t
+      r
 
     external get : t -> string -> string = "otoky_adb_get"
+    external iterinit : t -> unit = "otoky_adb_iterinit"
+    external iternext : t -> string = "otoky_adb_iternext"
 
-    let iterinit t = failwith "unimplemented"
-    let iternext t = failwith "unimplemented"
-    let misc t name args = failwith "unimplemented"
-    let open_ t name = failwith "unimplemented"
-    let optimize t params = failwith "unimplemented"
-    let out t key = failwith "unimplemented"
-    let path t = failwith "unimplemented"
-    let put t key value = failwith "unimplemented"
-    let putcat t key value = failwith "unimplemented"
-    let putkeep t key value = failwith "unimplemented"
-    let rnum t = failwith "unimplemented"
-    let size t = failwith "unimplemented"
-    let sync t = failwith "unimplemented"
-    let tranabort t = failwith "unimplemented"
-    let tranbegin t = failwith "unimplemented"
-    let trancommit t = failwith "unimplemented"
-    let vanish t = failwith "unimplemented"
-    let vsiz t key = failwith "unimplemented"
+    external _misc : t -> string -> Tclist.t -> Tclist.t = "otoky_adb_misc"
+    let misc t name args =
+      let args_tclist = Tcl.to_tclist args in
+      let ret_tclist = _misc t name args_tclist in
+      let r = Tcl.of_tclist ret_tclist in
+      if Tcl.del then begin Tclist.del args_tclist; Tclist.del ret_tclist end;
+      r
+
+    external open_ : t -> string -> unit = "otoky_adb_open"
+    external optimize : t -> ?params:string -> unit -> unit = "otoky_adb_optimize"
+    external out : t -> string -> unit = "otoky_adb_out"
+    external path : t -> string = "otoky_adb_path"
+    external put : t -> string -> string -> unit = "otoky_adb_put"
+    external putcat : t -> string -> string -> unit = "otoky_adb_putcat"
+    external putkeep : t -> string -> string -> unit = "otoky_adb_putkeep"
+    external rnum : t -> int64 = "otoky_adb_rnum"
+    external size : t -> int64 = "otoky_adb_size"
+    external sync : t -> unit = "otoky_adb_sync"
+    external tranabort : t -> unit = "otoky_adb_tranabort"
+    external tranbegin : t -> unit = "otoky_adb_tranbegin"
+    external trancommit : t -> unit = "otoky_adb_trancommit"
+    external vanish : t -> unit = "otoky_adb_vanish"
+    external vsiz : t -> string -> int = "otoky_adb_vsiz"
   end
 
   include Fun (Tclist_list)
