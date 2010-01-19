@@ -302,20 +302,37 @@ struct
   struct
     type tclist_t = Tcl.t
 
-    let new_ () = failwith "unimplemented"
-  
-    let adddouble t key num = failwith "unimplemented"
-    let addint t key num = failwith "unimplemented"
-    let close t = failwith "unimplemented"
-    let copy t path = failwith "unimplemented"
-    let fsiz t = failwith "unimplemented"
-    let fwmkeys t ?max prefix = failwith "unimplemented"
-    let get t key = failwith "unimplemented"
-    let getlist t key = failwith "unimplemented"
-    let open_ t ?mode path = failwith "unimplemented"
-    let optimize t ?lmemb ?nmemb ?bnum ?apow ?fpow ?opts () = failwith "unimplemented"
-    let out t key = failwith "unimplemented"
-    let outlist t key = failwith "unimplemented"
+    external new_ : unit -> t = "otoky_bdb_new"
+
+    external adddouble : t -> string -> float -> float = "otoky_bdb_adddouble"
+    external addint : t -> string -> int -> int = "otoky_bdb_addint"
+    external close : t -> unit = "otoky_bdb_close"
+    external copy : t -> string -> unit = "otoky_bdb_copy"
+    external fsiz : t -> int64 = "otoky_bdb_fsiz"
+
+    external _fwmkeys : t -> ?max:int -> string -> Tclist.t = "otoky_bdb_fwmkeys"
+    let fwmkeys t ?max prefix =
+      let tclist = _fwmkeys t ?max prefix in
+      let r = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      r
+
+    external get : t -> string -> string = "otoky_bdb_get"
+
+    external _getlist : t -> string -> Tclist.t = "otoky_bdb_getlist"
+    let getlist t key =
+      let tclist = _getlist t key in
+      let r = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      r
+
+    external open_ : t -> ?mode:omode list -> string -> unit = "otoky_bdb_open"
+    external optimize :
+      t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
+	  "otoky_bdb_optimize_bc" "otoky_bdb_optimize"
+    external out : t -> string -> unit = "otoky_bdb_out"
+    external outlist : t -> string -> unit = "otoky_bdb_outlist"
+
     let path t = failwith "unimplemented"
     let put t key value = failwith "unimplemented"
     let putcat t key value = failwith "unimplemented"
