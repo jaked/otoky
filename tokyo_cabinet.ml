@@ -25,7 +25,9 @@ type error =
     | Enorec
     | Emisc
 
-exception Error of error * string
+exception Error of error * string * string
+
+let _ = Callback.register_exception "Tokyo_cabinet.Error" (Error (Emisc, "", ""))
 
 type omode = Oreader | Owriter | Ocreat | Otrunc | Onolck | Olcknb | Otsync
 

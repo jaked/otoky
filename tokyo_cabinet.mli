@@ -25,7 +25,7 @@ type error =
     | Enorec
     | Emisc
 
-exception Error of error * string
+exception Error of error * string * string
 
 type omode = Oreader | Owriter | Ocreat | Otrunc | Onolck | Olcknb | Otsync
 
