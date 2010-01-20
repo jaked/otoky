@@ -382,9 +382,9 @@ struct
     external tune :
       t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
           "otoky_bdb_tune_bc" "otoky_bdb_tune"
-    external vanish : t -> unit = "otoky_adb_vanish"
-    external vnum : t -> string -> int = "otoky_adb_vnum"
-    external vsiz : t -> string -> int = "otoky_adb_vsiz"
+    external vanish : t -> unit = "otoky_bdb_vanish"
+    external vnum : t -> string -> int = "otoky_bdb_vnum"
+    external vsiz : t -> string -> int = "otoky_bdb_vsiz"
   end
 
   include Fun (Tclist_list)

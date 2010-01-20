@@ -187,6 +187,11 @@ typedef struct adb_wrap {
 
 #define adb_wrap_val(v) (*((adb_wrap **)(Data_custom_val(v))))
 
+static void adb_set_open(value vadb, bool open)
+{
+  adb_wrap_val(vadb)->open = open;
+}
+
 static void adb_finalize(value vadb)
 {
   adb_wrap *adbw = adb_wrap_val(vadb);
@@ -278,7 +283,7 @@ value otoky_adb_close(value vadb)
   caml_enter_blocking_section();
   r = tcadbclose(adb);
   caml_leave_blocking_section();
-  adb_wrap_val(vadb)->open = false;
+  adb_set_open(vadb, false);
   if (!r)
     adb_error(adb, fn_name);
   return Val_unit;
@@ -383,7 +388,7 @@ value otoky_adb_open(value vadb, value vname)
   caml_leave_blocking_section();
   if (!r)
     adb_error(adb, fn_name);
-  adb_wrap_val(vadb)->open = true;
+  adb_set_open(vadb, true);
   return Val_unit;
 }
 
@@ -584,10 +589,32 @@ value otoky_adb_vsiz(value vadb, value vkey)
 typedef struct bdb_wrap {
   TCBDB *bdb;
   bool open;
-  value *cmpfunc;
+  value cmpfunc;
 } bdb_wrap;
 
 #define bdb_wrap_val(v) (*((bdb_wrap **)(Data_custom_val(v))))
+
+static void bdb_clear_cmpfunc(value vbdb)
+{
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
+  if (bdbw->cmpfunc != Val_unit) {
+    caml_remove_global_root(&bdbw->cmpfunc);
+    bdbw->cmpfunc = Val_unit;
+  }
+}
+
+static void bdb_set_cmpfunc(value vbdb, value vcmpfunc)
+{
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
+  bdb_clear_cmpfunc(vbdb);
+  bdbw->cmpfunc = vcmpfunc;
+  caml_register_global_root(&bdbw->cmpfunc);
+}
+
+static void bdb_set_open(value vbdb, bool open)
+{
+  bdb_wrap_val(vbdb)->open = open;
+}
 
 static void bdb_finalize(value vbdb)
 {
@@ -598,10 +625,7 @@ static void bdb_finalize(value vbdb)
     (void)tcbdbclose(bdbw->bdb);
     caml_leave_blocking_section();
     bdbw->open = false;
-    if (bdbw->cmpfunc) {
-      caml_remove_global_root(bdbw->cmpfunc);
-      bdbw->cmpfunc = NULL;
-    }
+    bdb_clear_cmpfunc(vbdb);
   }
 }
 
@@ -613,7 +637,7 @@ static value bdb_alloc(TCBDB *bdb)
   bdbw = caml_stat_alloc(sizeof(bdb_wrap));
   bdbw->bdb = bdb;
   bdbw->open = false;
-  bdbw->cmpfunc = NULL;
+  bdbw->cmpfunc = Val_unit;
   bdb_wrap_val(vres) = bdbw;
   return vres;
 }
@@ -685,12 +709,8 @@ value otoky_bdb_close(value vbdb)
   caml_enter_blocking_section();
   r = tcbdbclose(bdb);
   caml_leave_blocking_section();
-  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
-  bdbw->open = false;
-  if (bdbw->cmpfunc) {
-    caml_remove_global_root(bdbw->cmpfunc);
-    bdbw->cmpfunc = NULL;
-  }
+  bdb_set_open(vbdb, false);
+  bdb_clear_cmpfunc(vbdb);
   if (!r)
     bdb_error(bdb, fn_name);
   return Val_unit;
@@ -774,7 +794,7 @@ value otoky_bdb_open(value vbdb, value vmode, value vname)
   caml_leave_blocking_section();
   if (!r)
     bdb_error(bdb, fn_name);
-  bdb_wrap_val(vbdb)->open = true;
+  bdb_set_open(vbdb, true);
   return Val_unit;
 }
 
@@ -973,7 +993,7 @@ static int cmp_custom(const char *aptr, int asiz, const char *bptr, int bsiz, bd
   Begin_roots1(a);
   b = copy_string_length(bptr, bsiz);
   End_roots();
-  vr = caml_callback2_exn(*bdbw->cmpfunc, a, b);
+  vr = caml_callback2_exn(bdbw->cmpfunc, a, b);
   if (Is_exception_result(vr))
     r = 0;
   else
@@ -988,7 +1008,7 @@ static int cmp_custom_raw(const char *aptr, int asiz, const char *bptr, int bsiz
   int r;
 
   caml_leave_blocking_section();
-  vr = caml_callbackN_exn(*bdbw->cmpfunc, 4, vargs);
+  vr = caml_callbackN_exn(bdbw->cmpfunc, 4, vargs);
   if (Is_exception_result(vr))
     r = 0;
   else
@@ -1005,12 +1025,7 @@ value otoky_bdb_setcmpfunc(value vbdb, value vcmpfunc)
   bool r;
   TCCMP cmp = NULL;
   void *cmpop = NULL;
-  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
 
-  if (bdbw->cmpfunc) {
-    caml_remove_global_root(bdbw->cmpfunc);
-    bdbw->cmpfunc = NULL;
-  }
   if (Is_long(vcmpfunc)) {
     switch (Int_val(vcmpfunc)) {
     case Cmp_lexical: cmp = tccmplexical; break;
@@ -1019,6 +1034,7 @@ value otoky_bdb_setcmpfunc(value vbdb, value vcmpfunc)
     case Cmp_int64:   cmp = tccmpint64;   break;
     default: break;
     }
+    bdb_clear_cmpfunc(vbdb);
   }
   else {
     switch (Tag_val(vcmpfunc)) {
@@ -1026,8 +1042,8 @@ value otoky_bdb_setcmpfunc(value vbdb, value vcmpfunc)
     case Cmp_custom_raw: cmp = (TCCMP)cmp_custom_raw; break;
     default: break;
     }
-    cmpop = (void *)bdbw;
-    caml_register_global_root(bdbw->cmpfunc);
+    cmpop = (void *)bdb_wrap_val(vbdb);
+    bdb_set_cmpfunc(vbdb, Field(vcmpfunc, 0));
   }
 
   caml_enter_blocking_section();
