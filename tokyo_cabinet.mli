@@ -129,7 +129,9 @@ end
 
 module BDB :
 sig
-  type cmpfunc = Cmp_lexical | Cmp_decimal | Cmp_int32 | Cmp_int64 | Cmp_custom of (string -> string -> int)
+  type cmpfunc =
+      | Cmp_lexical | Cmp_decimal | Cmp_int32 | Cmp_int64
+      | Cmp_custom of (string -> string -> int) | Cmp_custom_raw of (string -> int -> string -> int -> int)
 
   type t
 
@@ -157,9 +159,9 @@ sig
     val putdup : t -> string -> string -> unit
     val putkeep : t -> string -> string -> unit
     val putlist : t -> string -> tclist_t -> unit
-    val range : t -> ?bkey:string -> ?binc:bool -> ?ekey:string -> ?einc:bool -> ?max:int -> tclist_t
+    val range : t -> ?bkey:string -> ?binc:bool -> ?ekey:string -> ?einc:bool -> ?max:int -> unit -> tclist_t
     val rnum : t -> int64
-    val setcache : t -> ?lcnum:int -> ?ncnum:int -> unit -> unit
+    val setcache : t -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit
     val setcmpfunc : t -> cmpfunc -> unit
     val setdfunit : t -> int32 -> unit
     val setxmsiz : t -> int64 -> unit

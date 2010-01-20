@@ -226,11 +226,18 @@ struct
 
     external _misc : t -> string -> Tclist.t -> Tclist.t = "otoky_adb_misc"
     let misc t name args =
-      let args_tclist = Tcl.to_tclist args in
-      let ret_tclist = _misc t name args_tclist in
-      let r = Tcl.of_tclist ret_tclist in
-      if Tcl.del then begin Tclist.del args_tclist; Tclist.del ret_tclist end;
-      r
+      if Tcl.del
+      then
+        let args_tclist = Tcl.to_tclist args in
+        let ret_tclist =
+          try _misc t name args_tclist
+          with e -> Tclist.del args_tclist; raise e in
+        Tclist.del args_tclist;
+        let r = Tcl.of_tclist ret_tclist in
+        Tclist.del ret_tclist;
+        r
+      else
+        Tcl.of_tclist (_misc t name (Tcl.to_tclist args))
 
     external open_ : t -> string -> unit = "otoky_adb_open"
     external optimize : t -> ?params:string -> unit -> unit = "otoky_adb_optimize"
@@ -254,7 +261,9 @@ end
 
 module BDB =
 struct
-  type cmpfunc = Cmp_lexical | Cmp_decimal | Cmp_int32 | Cmp_int64 | Cmp_custom of (string -> string -> int)
+  type cmpfunc =
+      | Cmp_lexical | Cmp_decimal | Cmp_int32 | Cmp_int64
+      | Cmp_custom of (string -> string -> int) | Cmp_custom_raw of (string -> int -> string -> int -> int)
 
   type t
 
@@ -282,9 +291,9 @@ struct
     val putdup : t -> string -> string -> unit
     val putkeep : t -> string -> string -> unit
     val putlist : t -> string -> tclist_t -> unit
-    val range : t -> ?bkey:string -> ?binc:bool -> ?ekey:string -> ?einc:bool -> ?max:int -> tclist_t
+    val range : t -> ?bkey:string -> ?binc:bool -> ?ekey:string -> ?einc:bool -> ?max:int -> unit -> tclist_t
     val rnum : t -> int64
-    val setcache : t -> ?lcnum:int -> ?ncnum:int -> unit -> unit
+    val setcache : t -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit
     val setcmpfunc : t -> cmpfunc -> unit
     val setdfunit : t -> int32 -> unit
     val setxmsiz : t -> int64 -> unit
@@ -329,30 +338,53 @@ struct
     external open_ : t -> ?mode:omode list -> string -> unit = "otoky_bdb_open"
     external optimize :
       t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
-	  "otoky_bdb_optimize_bc" "otoky_bdb_optimize"
+          "otoky_bdb_optimize_bc" "otoky_bdb_optimize"
     external out : t -> string -> unit = "otoky_bdb_out"
     external outlist : t -> string -> unit = "otoky_bdb_outlist"
+    external path : t -> string = "otoky_bdb_path"
+    external put : t -> string -> string -> unit = "otoky_bdb_put"
+    external putcat : t -> string -> string -> unit = "otoky_bdb_putcat"
+    external putdup : t -> string -> string -> unit = "otoky_bdb_putdup"
+    external putkeep : t -> string -> string -> unit = "otoky_bdb_putkeep"
 
-    let path t = failwith "unimplemented"
-    let put t key value = failwith "unimplemented"
-    let putcat t key value = failwith "unimplemented"
-    let putdup t key value = failwith "unimplemented"
-    let putkeep t key value = failwith "unimplemented"
-    let putlist t key value = failwith "unimplemented"
-    let range t ?bkey ?binc ?ekey ?einc ?max = failwith "unimplemented"
-    let rnum t = failwith "unimplemented"
-    let setcache t ?lcnum ?ncnum () = failwith "unimplemented"
-    let setcmpfunc t cmp = failwith "unimplemented"
-    let setdfunit t dfunit = failwith "unimplemented"
-    let setxmsiz t xmsiz = failwith "unimplemented"
-    let sync t = failwith "unimplemented"
-    let tranabort t = failwith "unimplemented"
-    let tranbegin t = failwith "unimplemented"
-    let trancommit t = failwith "unimplemented"
-    let tune t ?lmemb ?nmemb ?bnum ?apow ?fpow ?opts () = failwith "unimplemented"
-    let vanish t = failwith "unimplemented"
-    let vnum t key = failwith "unimplemented"
-    let vsiz t key = failwith "unimplemented"
+    external _putlist : t -> string -> Tclist.t -> unit = "otoky_bdb_putlist"
+    let putlist t key vals =
+      if Tcl.del
+      then
+        let vals_tclist = Tcl.to_tclist vals in
+        begin
+          try _putlist t key vals_tclist
+          with e -> Tclist.del vals_tclist; raise e
+        end;
+        Tclist.del vals_tclist
+      else
+        _putlist t key (Tcl.to_tclist vals)
+
+    external _range :
+      t -> ?bkey:string -> ?binc:bool -> ?ekey:string -> ?einc:bool -> ?max:int -> unit -> Tclist.t =
+      "otoky_bdb_range_bc" "otoky_bdb_range"
+    let range t ?bkey ?binc ?ekey ?einc ?max () =
+      let tclist = _range t ?bkey ?binc ?ekey ?einc ?max () in
+      let r = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      r
+
+    external rnum : t -> int64 = "otoky_bdb_rnum"
+    external setcache : t -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit = "otoky_bdb_setcache"
+    external setcmpfunc : t -> cmpfunc -> unit = "otoky_bdb_setcmpfunc"
+    external setdfunit : t -> int32 -> unit = "otoky_bdb_setdfunit"
+    external setxmsiz : t -> int64 -> unit = "otoky_bdb_setxmsiz"
+
+    external sync : t -> unit = "otoky_bdb_sync"
+    external tranabort : t -> unit = "otoky_bdb_tranabort"
+    external tranbegin : t -> unit = "otoky_bdb_tranbegin"
+    external trancommit : t -> unit = "otoky_bdb_trancommit"
+    external tune :
+      t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
+          "otoky_bdb_tune_bc" "otoky_bdb_tune"
+    external vanish : t -> unit = "otoky_adb_vanish"
+    external vnum : t -> string -> int = "otoky_adb_vnum"
+    external vsiz : t -> string -> int = "otoky_adb_vsiz"
   end
 
   include Fun (Tclist_list)
@@ -423,7 +455,7 @@ struct
     type tclist_t = Tcl.t
 
     let new_ () = failwith "unimplemented"
-  
+
     let adddouble t key num = failwith "unimplemented"
     let addint t key num = failwith "unimplemented"
     let close t = failwith "unimplemented"
@@ -498,7 +530,7 @@ struct
     type tclist_t = Tcl.t
 
     let new_ () = failwith "unimplemented"
-  
+
     let adddouble t key num = failwith "unimplemented"
     let addint t key num = failwith "unimplemented"
     let close t = failwith "unimplemented"
@@ -582,7 +614,7 @@ struct
     type tcmap_t = Tcm.t
 
     let new_ () = failwith "unimplemented"
-  
+
     let adddouble t pkey num = failwith "unimplemented"
     let addint t pkey num = failwith "unimplemented"
     let close t = failwith "unimplemented"
@@ -658,7 +690,7 @@ struct
     type tcmap_t = Tcm.t
 
     let new_ tdb = failwith "unimplemented"
-  
+
     let addcond t name ?negate ?noidx op expr = failwith "unimplemented"
     let hint t = failwith "unimplemented"
     let kwic t ?name ?width ?opts cols = failwith "unimplemented"
@@ -670,5 +702,5 @@ struct
     let setorder t string qord = failwith "unimplemented"
   end
 
-  include Fun (Tclist_list) (Tcmap_list)  
+  include Fun (Tclist_list) (Tcmap_list)
 end
