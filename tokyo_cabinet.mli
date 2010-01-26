@@ -31,6 +31,32 @@ type omode = Oreader | Owriter | Ocreat | Otrunc | Onolck | Olcknb | Otsync
 
 type opt = Tlarge | Tdeflate | Tbzip | Ttcbs
 
+module Tcstr :
+sig
+  type t = string * int
+
+  external del : t -> unit = "otoky_tcstr_del"
+
+  val copy : t -> string
+  val of_string : string -> t
+end
+
+module type Tcstr_t =
+sig
+  type t
+
+  val del : bool
+
+  val of_tcstr : Tcstr.t -> t
+  val to_tcstr : t -> Tcstr.t
+
+  val string : t -> string
+  val length : t -> int
+end
+
+module Tcstr_string : Tcstr_t with type t = string
+module Tcstr_tcstr : Tcstr_t with type t = Tcstr.t
+
 module Tclist :
 sig
   type t
@@ -92,26 +118,27 @@ sig
 
   module type Sig =
   sig
+    type tcstr_t
     type tclist_t
 
     val new_ : unit -> t
 
-    val adddouble : t -> string -> float -> float
-    val addint : t -> string -> int -> int
+    val adddouble : t -> tcstr_t -> float -> float
+    val addint : t -> tcstr_t -> int -> int
     val close : t -> unit
     val copy : t -> string -> unit
-    val fwmkeys : t -> ?max:int -> string -> tclist_t
-    val get : t -> string -> string
+    val fwmkeys : t -> ?max:int -> tcstr_t -> tclist_t
+    val get : t -> tcstr_t -> tcstr_t
     val iterinit : t -> unit
-    val iternext : t -> string
+    val iternext : t -> tcstr_t
     val misc : t -> string -> tclist_t -> tclist_t
     val open_ : t -> string -> unit
     val optimize : t -> ?params:string -> unit -> unit
-    val out : t -> string -> unit
+    val out : t -> tcstr_t -> unit
     val path : t -> string
-    val put : t -> string -> string -> unit
-    val putcat : t -> string -> string -> unit
-    val putkeep : t -> string -> string -> unit
+    val put : t -> tcstr_t -> tcstr_t -> unit
+    val putcat : t -> tcstr_t -> tcstr_t -> unit
+    val putkeep : t -> tcstr_t -> tcstr_t -> unit
     val rnum : t -> int64
     val size : t -> int64
     val sync : t -> unit
@@ -119,12 +146,12 @@ sig
     val tranbegin : t -> unit
     val trancommit : t -> unit
     val vanish : t -> unit
-    val vsiz : t -> string -> int
+    val vsiz : t -> tcstr_t -> int
   end
 
-  include Sig with type tclist_t = string list
+  include Sig with type tcstr_t = string and type tclist_t = string list
 
-  module Fun (Tcl : Tclist_t) : Sig with type tclist_t = Tcl.t
+  module Fun (Tcs : Tcstr_t) (Tcl : Tclist_t) : Sig with type tcstr_t = Tcs.t and type tclist_t = Tcl.t
 end
 
 module BDB :

@@ -58,6 +58,14 @@ static void raise_error_exn(int con, const char *fn_name, const char *err_msg)
   caml_raise(vexn);
 }
 
+static value make_tcstr(const void *string, int len)
+{
+  value vpair = caml_alloc_tuple(2);
+  Field(vpair, 0) = (value)string;
+  Field(vpair, 1) = Val_int(len);
+  return vpair;
+}
+
 enum omode {
   Oreader, Owriter, Ocreat, Otrunc, Onolck, Olcknb, Otsync
 };
@@ -247,13 +255,13 @@ value otoky_adb_new(value unit)
 }
 
 CAMLprim
-value otoky_adb_adddouble(value vadb, value vkey, value vnum)
+value otoky_adb_adddouble(value vadb, value vkey, value vlen, value vnum)
 {
   const char *fn_name = "adddouble";
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   double num;
   caml_enter_blocking_section();
-  num = tcadbadddouble(adb, String_val(vkey), caml_string_length(vkey), Double_val(vnum));
+  num = tcadbadddouble(adb, String_val(vkey), Int_val(vlen), Double_val(vnum));
   caml_leave_blocking_section();
   if (isnan(num))
     adb_error(adb, fn_name);
@@ -261,13 +269,13 @@ value otoky_adb_adddouble(value vadb, value vkey, value vnum)
 }
 
 CAMLprim
-value otoky_adb_addint(value vadb, value vkey, value vnum)
+value otoky_adb_addint(value vadb, value vkey, value vlen, value vnum)
 {
   const char *fn_name = "addint";
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   int num;
   caml_enter_blocking_section();
-  num = tcadbaddint(adb, String_val(vkey), caml_string_length(vkey), Int_val(vnum));
+  num = tcadbaddint(adb, String_val(vkey), Int_val(vlen), Int_val(vnum));
   caml_leave_blocking_section();
   if (num == INT_MIN)
     adb_error(adb, fn_name);
@@ -304,32 +312,29 @@ value otoky_adb_copy(value vadb, value vpath)
 }
 
 CAMLprim
-TCLIST *otoky_adb_fwmkeys(value vadb, value vmax, value vprefix)
+TCLIST *otoky_adb_fwmkeys(value vadb, value vmax, value vprefix, value vlen)
 {
   const char *fn_name = "fwmkeys";
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   TCLIST *tclist;
   caml_enter_blocking_section();
-  tclist = tcadbfwmkeys(adb, String_val(vprefix), caml_string_length(vprefix), int_option(vmax));
+  tclist = tcadbfwmkeys(adb, String_val(vprefix), Int_val(vlen), int_option(vmax));
   caml_leave_blocking_section();
   return tclist;
 }
 
 CAMLprim
-value otoky_adb_get(value vadb, value vkey)
+value otoky_adb_get(value vadb, value vkey, value vlen)
 {
   const char *fn_name = "get";
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   void *val;
   int len;
-  value vval;
   caml_enter_blocking_section();
-  val = tcadbget(adb, String_val(vkey), caml_string_length(vkey), &len);
+  val = tcadbget(adb, String_val(vkey), Int_val(vlen), &len);
   caml_leave_blocking_section();
   if (!val) caml_raise_not_found ();
-  vval = copy_string_length(val, len);
-  tcfree(val);
-  return vval;
+  return make_tcstr(val, Val_int(len));
 }
 
 CAMLprim
@@ -353,14 +358,11 @@ value otoky_adb_iternext(value vadb)
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   void *val;
   int len;
-  value vval;
   caml_enter_blocking_section();
   val = tcadbiternext(adb, &len);
   caml_leave_blocking_section();
   if (!val) caml_raise_not_found ();
-  vval = copy_string_length(val, len);
-  tcfree(val);
-  return vval;
+  return make_tcstr(val, Val_int(len));
 }
 
 CAMLprim
@@ -407,13 +409,13 @@ value otoky_adb_optimize(value vadb, value vparams, value vunit)
 }
 
 CAMLprim
-value otoky_adb_out(value vadb, value vkey)
+value otoky_adb_out(value vadb, value vkey, value vlen)
 {
   const char *fn_name = "out";
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbout(adb, String_val(vkey), caml_string_length(vkey));
+  r = tcadbout(adb, String_val(vkey), Int_val(vlen));
   caml_leave_blocking_section();
   if (!r)
     adb_error(adb, fn_name);
@@ -435,13 +437,13 @@ value otoky_adb_path(value vadb)
 }
 
 CAMLprim
-value otoky_adb_put(value vadb, value vkey, value vval)
+value otoky_adb_put(value vadb, value vkey, value vkeylen, value vval, value vvallen)
 {
   const char *fn_name = "put";
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbput(adb, String_val(vkey), caml_string_length(vkey), String_val(vval), caml_string_length(vval));
+  r = tcadbput(adb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
   if (!r)
     adb_error(adb, fn_name);
@@ -449,13 +451,13 @@ value otoky_adb_put(value vadb, value vkey, value vval)
 }
 
 CAMLprim
-value otoky_adb_putcat(value vadb, value vkey, value vval)
+value otoky_adb_putcat(value vadb, value vkey, value vkeylen, value vval, value vvallen)
 {
   const char *fn_name = "putcat";
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbputcat(adb, String_val(vkey), caml_string_length(vkey), String_val(vval), caml_string_length(vval));
+  r = tcadbputcat(adb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
   if (!r)
     adb_error(adb, fn_name);
@@ -463,13 +465,13 @@ value otoky_adb_putcat(value vadb, value vkey, value vval)
 }
 
 CAMLprim
-value otoky_adb_putkeep(value vadb, value vkey, value vval)
+value otoky_adb_putkeep(value vadb, value vkey, value vkeylen, value vval, value vvallen)
 {
   const char *fn_name = "putkeep";
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbputkeep(adb, String_val(vkey), caml_string_length(vkey), String_val(vval), caml_string_length(vval));
+  r = tcadbputkeep(adb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
   if (!r)
     adb_error(adb, fn_name);
@@ -571,13 +573,13 @@ value otoky_adb_vanish(value vadb)
 }
 
 CAMLprim
-value otoky_adb_vsiz(value vadb, value vkey)
+value otoky_adb_vsiz(value vadb, value vkey, value vkeylen)
 {
   const char *fn_name = "vsiz";
   TCADB *adb = adb_ptr(vadb, true, fn_name);
   int r;
   caml_enter_blocking_section();
-  r = tcadbvsiz(adb, String_val(vkey), caml_string_length(vkey));
+  r = tcadbvsiz(adb, String_val(vkey), Int_val(vkeylen));
   caml_leave_blocking_section();
   if (r == -1)
     adb_error(adb, fn_name);

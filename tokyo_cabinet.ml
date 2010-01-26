@@ -33,6 +33,60 @@ type omode = Oreader | Owriter | Ocreat | Otrunc | Onolck | Olcknb | Otsync
 
 type opt = Tlarge | Tdeflate | Tbzip | Ttcbs
 
+module Tcstr =
+struct
+  type t = string * int
+
+  external del : t -> unit = "otoky_tcstr_del"
+
+  let copy (s, len) =
+    let r = String.create len in
+    String.unsafe_blit s 0 r 0 len;
+    r
+
+  let of_string s =
+    s, String.length s
+end
+
+module type Tcstr_t =
+sig
+  type t
+
+  val del : bool
+
+  val of_tcstr : Tcstr.t -> t
+  val to_tcstr : t -> Tcstr.t
+
+  val string : t -> string
+  val length : t -> int
+end
+
+module Tcstr_string =
+struct
+  type t = string
+
+  let del = false
+
+  let of_tcstr = Tcstr.copy
+  let to_tcstr = Tcstr.of_string
+
+  let string t = t
+  let length t = String.length t
+end
+
+module Tcstr_tcstr =
+struct
+  type t = Tcstr.t
+
+  let del = true
+
+  external of_tcstr : Tcstr.t -> t = "%identity"
+  external to_tcstr : Tcstr.t -> t = "%identity"
+
+  let string (t, _) = t
+  let length (_, len) = len
+end
+
 module Tclist =
 struct
   type t
@@ -172,26 +226,27 @@ struct
 
   module type Sig =
   sig
+    type tcstr_t
     type tclist_t
 
     val new_ : unit -> t
 
-    val adddouble : t -> string -> float -> float
-    val addint : t -> string -> int -> int
+    val adddouble : t -> tcstr_t -> float -> float
+    val addint : t -> tcstr_t -> int -> int
     val close : t -> unit
     val copy : t -> string -> unit
-    val fwmkeys : t -> ?max:int -> string -> tclist_t
-    val get : t -> string -> string
+    val fwmkeys : t -> ?max:int -> tcstr_t -> tclist_t
+    val get : t -> tcstr_t -> tcstr_t
     val iterinit : t -> unit
-    val iternext : t -> string
+    val iternext : t -> tcstr_t
     val misc : t -> string -> tclist_t -> tclist_t
     val open_ : t -> string -> unit
     val optimize : t -> ?params:string -> unit -> unit
-    val out : t -> string -> unit
+    val out : t -> tcstr_t -> unit
     val path : t -> string
-    val put : t -> string -> string -> unit
-    val putcat : t -> string -> string -> unit
-    val putkeep : t -> string -> string -> unit
+    val put : t -> tcstr_t -> tcstr_t -> unit
+    val putcat : t -> tcstr_t -> tcstr_t -> unit
+    val putkeep : t -> tcstr_t -> tcstr_t -> unit
     val rnum : t -> int64
     val size : t -> int64
     val sync : t -> unit
@@ -199,30 +254,47 @@ struct
     val tranbegin : t -> unit
     val trancommit : t -> unit
     val vanish : t -> unit
-    val vsiz : t -> string -> int
+    val vsiz : t -> tcstr_t -> int
   end
 
-  module Fun (Tcl : Tclist_t) =
+  module Fun (Tcs : Tcstr_t) (Tcl : Tclist_t) =
   struct
+    type tcstr_t = Tcs.t
     type tclist_t = Tcl.t
 
     external new_ : unit -> t = "otoky_adb_new"
 
-    external adddouble : t -> string -> float -> float = "otoky_adb_adddouble"
-    external addint : t -> string -> int -> int = "otoky_adb_addint"
+    external _adddouble : t -> string -> int -> float -> float = "otoky_adb_adddouble"
+    let adddouble t key num = _adddouble t (Tcs.string key) (Tcs.length key) num
+
+    external _addint : t -> string -> int -> int -> int = "otoky_adb_addint"
+    let addint t key num = _addint t (Tcs.string key) (Tcs.length key) num
+
     external close : t -> unit = "otoky_adb_close"
     external copy : t -> string -> unit = "otoky_adb_copy"
 
-    external _fwmkeys : t -> ?max:int -> string -> Tclist.t = "otoky_adb_fwmkeys"
+    external _fwmkeys : t -> ?max:int -> string -> int -> Tclist.t = "otoky_adb_fwmkeys"
     let fwmkeys t ?max prefix =
-      let tclist = _fwmkeys t ?max prefix in
+      let tclist = _fwmkeys t ?max (Tcs.string prefix) (Tcs.length prefix) in
       let r = Tcl.of_tclist tclist in
       if Tcl.del then Tclist.del tclist;
       r
 
-    external get : t -> string -> string = "otoky_adb_get"
+    external _get : t -> string -> int -> Tcstr.t = "otoky_adb_get"
+    let get t key =
+      let tcstr = _get t (Tcs.string key) (Tcs.length key) in
+      let r = Tcs.of_tcstr tcstr in
+      if Tcs.del then Tcstr.del tcstr;
+      r
+
     external iterinit : t -> unit = "otoky_adb_iterinit"
-    external iternext : t -> string = "otoky_adb_iternext"
+
+    external _iternext : t -> Tcstr.t = "otoky_adb_iternext"
+    let iternext t =
+      let tcstr = _iternext t in
+      let r = Tcs.of_tcstr tcstr in
+      if Tcs.del then Tcstr.del tcstr;
+      r
 
     external _misc : t -> string -> Tclist.t -> Tclist.t = "otoky_adb_misc"
     let misc t name args =
@@ -241,11 +313,21 @@ struct
 
     external open_ : t -> string -> unit = "otoky_adb_open"
     external optimize : t -> ?params:string -> unit -> unit = "otoky_adb_optimize"
-    external out : t -> string -> unit = "otoky_adb_out"
+
+    external _out : t -> string -> int -> unit = "otoky_adb_out"
+    let out t key = _out t (Tcs.string key) (Tcs.length key)
+
     external path : t -> string = "otoky_adb_path"
-    external put : t -> string -> string -> unit = "otoky_adb_put"
-    external putcat : t -> string -> string -> unit = "otoky_adb_putcat"
-    external putkeep : t -> string -> string -> unit = "otoky_adb_putkeep"
+
+    external _put : t -> string -> int -> string -> int -> unit = "otoky_adb_put"
+    let put t key value = _put t (Tcs.string key) (Tcs.length key) (Tcs.string value) (Tcs.length value)
+
+    external _putcat : t -> string -> int -> string -> int -> unit = "otoky_adb_putcat"
+    let putcat t key value = _putcat t (Tcs.string key) (Tcs.length key) (Tcs.string value) (Tcs.length value)
+
+    external _putkeep : t -> string -> int -> string -> int -> unit = "otoky_adb_putkeep"
+    let putkeep t key value = _putkeep t (Tcs.string key) (Tcs.length key) (Tcs.string value) (Tcs.length value)
+
     external rnum : t -> int64 = "otoky_adb_rnum"
     external size : t -> int64 = "otoky_adb_size"
     external sync : t -> unit = "otoky_adb_sync"
@@ -253,10 +335,12 @@ struct
     external tranbegin : t -> unit = "otoky_adb_tranbegin"
     external trancommit : t -> unit = "otoky_adb_trancommit"
     external vanish : t -> unit = "otoky_adb_vanish"
-    external vsiz : t -> string -> int = "otoky_adb_vsiz"
+
+    external _vsiz : t -> string -> int -> int = "otoky_adb_vsiz"
+    let vsiz t key = _vsiz t (Tcs.string key) (Tcs.length key)
   end
 
-  include Fun (Tclist_list)
+  include Fun (Tcstr_string) (Tclist_list)
 end
 
 module BDB =
