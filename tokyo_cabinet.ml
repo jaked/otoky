@@ -33,11 +33,11 @@ type omode = Oreader | Owriter | Ocreat | Otrunc | Onolck | Olcknb | Otsync
 
 type opt = Tlarge | Tdeflate | Tbzip | Ttcbs
 
-module Tcstr =
+module Cstr =
 struct
   type t = string * int
 
-  external del : t -> unit = "otoky_tcstr_del"
+  external del : t -> unit = "otoky_cstr_del"
 
   let copy (s, len) =
     let r = String.create len in
@@ -48,40 +48,40 @@ struct
     s, String.length s
 end
 
-module type Tcstr_t =
+module type Cstr_t =
 sig
   type t
 
   val del : bool
 
-  val of_tcstr : Tcstr.t -> t
-  val to_tcstr : t -> Tcstr.t
+  val of_cstr : Cstr.t -> t
+  val to_cstr : t -> Cstr.t
 
   val string : t -> string
   val length : t -> int
 end
 
-module Tcstr_string =
+module Cstr_string =
 struct
   type t = string
 
   let del = false
 
-  let of_tcstr = Tcstr.copy
-  let to_tcstr = Tcstr.of_string
+  let of_cstr = Cstr.copy
+  let to_cstr = Cstr.of_string
 
   let string t = t
   let length t = String.length t
 end
 
-module Tcstr_tcstr =
+module Cstr_cstr =
 struct
-  type t = Tcstr.t
+  type t = Cstr.t
 
   let del = true
 
-  external of_tcstr : Tcstr.t -> t = "%identity"
-  external to_tcstr : Tcstr.t -> t = "%identity"
+  external of_cstr : Cstr.t -> t = "%identity"
+  external to_cstr : Cstr.t -> t = "%identity"
 
   let string (t, _) = t
   let length (_, len) = len
@@ -95,9 +95,9 @@ struct
   external del : t -> unit = "otoky_tclist_del"
   external num : t -> int = "otoky_tclist_num"
   external val_ : t -> int -> int ref -> string = "otoky_tclist_val"
-  external push : t -> string -> unit = "otoky_tclist_push"
-  external lsearch : t -> string -> int = "otoky_tclist_lsearch"
-  external bsearch : t -> string -> int = "otoky_tclist_bsearch"
+  external push : t -> string -> int -> unit = "otoky_tclist_push"
+  external lsearch : t -> string -> int -> int = "otoky_tclist_lsearch"
+  external bsearch : t -> string -> int -> int = "otoky_tclist_bsearch"
 
   let copy_val tclist k =
     let len = ref 0 in
@@ -150,7 +150,7 @@ struct
   let to_tclist t =
     let anum = List.length t in
     let tclist = Tclist.new_ ~anum () in
-    List.iter (Tclist.push tclist) t;
+    List.iter (fun s -> Tclist.push tclist s (String.length s)) t;
     tclist
 end
 
@@ -166,7 +166,7 @@ struct
   let to_tclist t =
     let anum = Array.length t in
     let tclist = Tclist.new_ ~anum () in
-    Array.iter (Tclist.push tclist) t;
+    Array.iter (fun s -> Tclist.push tclist s (String.length s)) t;
     tclist
 end
 
@@ -226,27 +226,27 @@ struct
 
   module type Sig =
   sig
-    type tcstr_t
+    type cstr_t
     type tclist_t
 
     val new_ : unit -> t
 
-    val adddouble : t -> tcstr_t -> float -> float
-    val addint : t -> tcstr_t -> int -> int
+    val adddouble : t -> cstr_t -> float -> float
+    val addint : t -> cstr_t -> int -> int
     val close : t -> unit
     val copy : t -> string -> unit
-    val fwmkeys : t -> ?max:int -> tcstr_t -> tclist_t
-    val get : t -> tcstr_t -> tcstr_t
+    val fwmkeys : t -> ?max:int -> cstr_t -> tclist_t
+    val get : t -> cstr_t -> cstr_t
     val iterinit : t -> unit
-    val iternext : t -> tcstr_t
+    val iternext : t -> cstr_t
     val misc : t -> string -> tclist_t -> tclist_t
     val open_ : t -> string -> unit
     val optimize : t -> ?params:string -> unit -> unit
-    val out : t -> tcstr_t -> unit
+    val out : t -> cstr_t -> unit
     val path : t -> string
-    val put : t -> tcstr_t -> tcstr_t -> unit
-    val putcat : t -> tcstr_t -> tcstr_t -> unit
-    val putkeep : t -> tcstr_t -> tcstr_t -> unit
+    val put : t -> cstr_t -> cstr_t -> unit
+    val putcat : t -> cstr_t -> cstr_t -> unit
+    val putkeep : t -> cstr_t -> cstr_t -> unit
     val rnum : t -> int64
     val size : t -> int64
     val sync : t -> unit
@@ -254,46 +254,46 @@ struct
     val tranbegin : t -> unit
     val trancommit : t -> unit
     val vanish : t -> unit
-    val vsiz : t -> tcstr_t -> int
+    val vsiz : t -> cstr_t -> int
   end
 
-  module Fun (Tcs : Tcstr_t) (Tcl : Tclist_t) =
+  module Fun (Cs : Cstr_t) (Tcl : Tclist_t) =
   struct
-    type tcstr_t = Tcs.t
+    type cstr_t = Cs.t
     type tclist_t = Tcl.t
 
     external new_ : unit -> t = "otoky_adb_new"
 
     external _adddouble : t -> string -> int -> float -> float = "otoky_adb_adddouble"
-    let adddouble t key num = _adddouble t (Tcs.string key) (Tcs.length key) num
+    let adddouble t key num = _adddouble t (Cs.string key) (Cs.length key) num
 
     external _addint : t -> string -> int -> int -> int = "otoky_adb_addint"
-    let addint t key num = _addint t (Tcs.string key) (Tcs.length key) num
+    let addint t key num = _addint t (Cs.string key) (Cs.length key) num
 
     external close : t -> unit = "otoky_adb_close"
     external copy : t -> string -> unit = "otoky_adb_copy"
 
     external _fwmkeys : t -> ?max:int -> string -> int -> Tclist.t = "otoky_adb_fwmkeys"
     let fwmkeys t ?max prefix =
-      let tclist = _fwmkeys t ?max (Tcs.string prefix) (Tcs.length prefix) in
+      let tclist = _fwmkeys t ?max (Cs.string prefix) (Cs.length prefix) in
       let r = Tcl.of_tclist tclist in
       if Tcl.del then Tclist.del tclist;
       r
 
-    external _get : t -> string -> int -> Tcstr.t = "otoky_adb_get"
+    external _get : t -> string -> int -> Cstr.t = "otoky_adb_get"
     let get t key =
-      let tcstr = _get t (Tcs.string key) (Tcs.length key) in
-      let r = Tcs.of_tcstr tcstr in
-      if Tcs.del then Tcstr.del tcstr;
+      let cstr = _get t (Cs.string key) (Cs.length key) in
+      let r = Cs.of_cstr cstr in
+      if Cs.del then Cstr.del cstr;
       r
 
     external iterinit : t -> unit = "otoky_adb_iterinit"
 
-    external _iternext : t -> Tcstr.t = "otoky_adb_iternext"
+    external _iternext : t -> Cstr.t = "otoky_adb_iternext"
     let iternext t =
-      let tcstr = _iternext t in
-      let r = Tcs.of_tcstr tcstr in
-      if Tcs.del then Tcstr.del tcstr;
+      let cstr = _iternext t in
+      let r = Cs.of_cstr cstr in
+      if Cs.del then Cstr.del cstr;
       r
 
     external _misc : t -> string -> Tclist.t -> Tclist.t = "otoky_adb_misc"
@@ -315,18 +315,18 @@ struct
     external optimize : t -> ?params:string -> unit -> unit = "otoky_adb_optimize"
 
     external _out : t -> string -> int -> unit = "otoky_adb_out"
-    let out t key = _out t (Tcs.string key) (Tcs.length key)
+    let out t key = _out t (Cs.string key) (Cs.length key)
 
     external path : t -> string = "otoky_adb_path"
 
     external _put : t -> string -> int -> string -> int -> unit = "otoky_adb_put"
-    let put t key value = _put t (Tcs.string key) (Tcs.length key) (Tcs.string value) (Tcs.length value)
+    let put t key value = _put t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
 
     external _putcat : t -> string -> int -> string -> int -> unit = "otoky_adb_putcat"
-    let putcat t key value = _putcat t (Tcs.string key) (Tcs.length key) (Tcs.string value) (Tcs.length value)
+    let putcat t key value = _putcat t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
 
     external _putkeep : t -> string -> int -> string -> int -> unit = "otoky_adb_putkeep"
-    let putkeep t key value = _putkeep t (Tcs.string key) (Tcs.length key) (Tcs.string value) (Tcs.length value)
+    let putkeep t key value = _putkeep t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
 
     external rnum : t -> int64 = "otoky_adb_rnum"
     external size : t -> int64 = "otoky_adb_size"
@@ -337,45 +337,46 @@ struct
     external vanish : t -> unit = "otoky_adb_vanish"
 
     external _vsiz : t -> string -> int -> int = "otoky_adb_vsiz"
-    let vsiz t key = _vsiz t (Tcs.string key) (Tcs.length key)
+    let vsiz t key = _vsiz t (Cs.string key) (Cs.length key)
   end
 
-  include Fun (Tcstr_string) (Tclist_list)
+  include Fun (Cstr_string) (Tclist_list)
 end
 
 module BDB =
 struct
   type cmpfunc =
       | Cmp_lexical | Cmp_decimal | Cmp_int32 | Cmp_int64
-      | Cmp_custom of (string -> string -> int) | Cmp_custom_raw of (string -> int -> string -> int -> int)
+      | Cmp_custom of (string -> string -> int) | Cmp_custom_cstr of (string -> int -> string -> int -> int)
 
   type t
 
   module type Sig =
   sig
+    type cstr_t
     type tclist_t
 
     val new_ : unit -> t
 
-    val adddouble : t -> string -> float -> float
-    val addint : t -> string -> int -> int
+    val adddouble : t -> cstr_t -> float -> float
+    val addint : t -> cstr_t -> int -> int
     val close : t -> unit
     val copy : t -> string -> unit
     val fsiz : t -> int64
-    val fwmkeys : t -> ?max:int -> string -> tclist_t
-    val get : t -> string -> string
-    val getlist : t -> string -> tclist_t
+    val fwmkeys : t -> ?max:int -> cstr_t -> tclist_t
+    val get : t -> cstr_t -> cstr_t
+    val getlist : t -> cstr_t -> tclist_t
     val open_ : t -> ?mode:omode list -> string -> unit
     val optimize : t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-    val out : t -> string -> unit
-    val outlist : t -> string -> unit
+    val out : t -> cstr_t -> unit
+    val outlist : t -> cstr_t -> unit
     val path : t -> string
-    val put : t -> string -> string -> unit
-    val putcat : t -> string -> string -> unit
-    val putdup : t -> string -> string -> unit
-    val putkeep : t -> string -> string -> unit
-    val putlist : t -> string -> tclist_t -> unit
-    val range : t -> ?bkey:string -> ?binc:bool -> ?ekey:string -> ?einc:bool -> ?max:int -> unit -> tclist_t
+    val put : t -> cstr_t -> cstr_t -> unit
+    val putcat : t -> cstr_t -> cstr_t -> unit
+    val putdup : t -> cstr_t -> cstr_t -> unit
+    val putkeep : t -> cstr_t -> cstr_t -> unit
+    val putlist : t -> cstr_t -> tclist_t -> unit
+    val range : t -> ?bkey:cstr_t -> ?binc:bool -> ?ekey:cstr_t -> ?einc:bool -> ?max:int -> unit -> tclist_t
     val rnum : t -> int64
     val setcache : t -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit
     val setcmpfunc : t -> cmpfunc -> unit
@@ -387,34 +388,44 @@ struct
     val trancommit : t -> unit
     val tune : t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
     val vanish : t -> unit
-    val vnum : t -> string -> int
-    val vsiz : t -> string -> int
+    val vnum : t -> cstr_t -> int
+    val vsiz : t -> cstr_t -> int
   end
 
-  module Fun (Tcl : Tclist_t) =
+  module Fun (Cs : Cstr_t) (Tcl : Tclist_t) =
   struct
+    type cstr_t = Cs.t
     type tclist_t = Tcl.t
 
     external new_ : unit -> t = "otoky_bdb_new"
 
-    external adddouble : t -> string -> float -> float = "otoky_bdb_adddouble"
-    external addint : t -> string -> int -> int = "otoky_bdb_addint"
+    external _adddouble : t -> string -> int -> float -> float = "otoky_bdb_adddouble"
+    let adddouble t key num = _adddouble t (Cs.string key) (Cs.length key) num
+
+    external _addint : t -> string -> int -> int -> int = "otoky_bdb_addint"
+    let addint t key num = _addint t (Cs.string key) (Cs.length key) num
+
     external close : t -> unit = "otoky_bdb_close"
     external copy : t -> string -> unit = "otoky_bdb_copy"
     external fsiz : t -> int64 = "otoky_bdb_fsiz"
 
-    external _fwmkeys : t -> ?max:int -> string -> Tclist.t = "otoky_bdb_fwmkeys"
+    external _fwmkeys : t -> ?max:int -> string -> int -> Tclist.t = "otoky_bdb_fwmkeys"
     let fwmkeys t ?max prefix =
-      let tclist = _fwmkeys t ?max prefix in
+      let tclist = _fwmkeys t ?max (Cs.string prefix) (Cs.length prefix) in
       let r = Tcl.of_tclist tclist in
       if Tcl.del then Tclist.del tclist;
       r
 
-    external get : t -> string -> string = "otoky_bdb_get"
+    external _get : t -> string -> int -> Cstr.t = "otoky_bdb_get"
+    let get t key =
+      let cstr = _get t (Cs.string key) (Cs.length key) in
+      let r = Cs.of_cstr cstr in
+      if Cs.del then Cstr.del cstr;
+      r
 
-    external _getlist : t -> string -> Tclist.t = "otoky_bdb_getlist"
+    external _getlist : t -> string -> int -> Tclist.t = "otoky_bdb_getlist"
     let getlist t key =
-      let tclist = _getlist t key in
+      let tclist = _getlist t (Cs.string key) (Cs.length key) in
       let r = Tcl.of_tclist tclist in
       if Tcl.del then Tclist.del tclist;
       r
@@ -423,32 +434,47 @@ struct
     external optimize :
       t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
           "otoky_bdb_optimize_bc" "otoky_bdb_optimize"
-    external out : t -> string -> unit = "otoky_bdb_out"
-    external outlist : t -> string -> unit = "otoky_bdb_outlist"
-    external path : t -> string = "otoky_bdb_path"
-    external put : t -> string -> string -> unit = "otoky_bdb_put"
-    external putcat : t -> string -> string -> unit = "otoky_bdb_putcat"
-    external putdup : t -> string -> string -> unit = "otoky_bdb_putdup"
-    external putkeep : t -> string -> string -> unit = "otoky_bdb_putkeep"
 
-    external _putlist : t -> string -> Tclist.t -> unit = "otoky_bdb_putlist"
+    external _out : t -> string -> int -> unit = "otoky_bdb_out"
+    let out t key = _out t (Cs.string key) (Cs.length key)
+
+    external _outlist : t -> string -> int -> unit = "otoky_bdb_outlist"
+    let outlist t key = _outlist t (Cs.string key) (Cs.length key)
+
+    external path : t -> string = "otoky_bdb_path"
+
+    external _put : t -> string -> int -> string -> int -> unit = "otoky_bdb_put"
+    let put t key value = _put t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
+
+    external _putcat : t -> string -> int -> string -> int -> unit = "otoky_bdb_putcat"
+    let putcat t key value = _putcat t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
+
+    external _putdup : t -> string -> int -> string -> int -> unit = "otoky_bdb_putdup"
+    let putdup t key value = _putdup t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
+
+    external _putkeep : t -> string -> int -> string -> int -> unit = "otoky_bdb_putkeep"
+    let putkeep t key value = _putkeep t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
+
+    external _putlist : t -> string -> int -> Tclist.t -> unit = "otoky_bdb_putlist"
     let putlist t key vals =
       if Tcl.del
       then
         let vals_tclist = Tcl.to_tclist vals in
         begin
-          try _putlist t key vals_tclist
+          try _putlist t (Cs.string key) (Cs.length key) vals_tclist
           with e -> Tclist.del vals_tclist; raise e
         end;
         Tclist.del vals_tclist
       else
-        _putlist t key (Tcl.to_tclist vals)
+        _putlist t (Cs.string key) (Cs.length key) (Tcl.to_tclist vals)
 
     external _range :
-      t -> ?bkey:string -> ?binc:bool -> ?ekey:string -> ?einc:bool -> ?max:int -> unit -> Tclist.t =
+      t -> ?bkey:string -> blen:int -> ?binc:bool -> ?ekey:string -> elen:int -> ?einc:bool -> ?max:int -> unit -> Tclist.t =
       "otoky_bdb_range_bc" "otoky_bdb_range"
     let range t ?bkey ?binc ?ekey ?einc ?max () =
-      let tclist = _range t ?bkey ?binc ?ekey ?einc ?max () in
+      let bkey, blen = match bkey with None -> None, -1 | Some key -> Some (Cs.string key), (Cs.length key) in
+      let ekey, elen = match ekey with None -> None, -1 | Some key -> Some (Cs.string key), (Cs.length key) in
+      let tclist = _range t ?bkey ~blen ?binc ?ekey ~elen ?einc ?max () in
       let r = Tcl.of_tclist tclist in
       if Tcl.del then Tclist.del tclist;
       r
@@ -467,11 +493,15 @@ struct
       t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
           "otoky_bdb_tune_bc" "otoky_bdb_tune"
     external vanish : t -> unit = "otoky_bdb_vanish"
-    external vnum : t -> string -> int = "otoky_bdb_vnum"
-    external vsiz : t -> string -> int = "otoky_bdb_vsiz"
+
+    external _vnum : t -> string -> int -> int = "otoky_bdb_vnum"
+    let vnum t key = _vnum t (Cs.string key) (Cs.length key)
+
+    external _vsiz : t -> string -> int -> int = "otoky_bdb_vsiz"
+    let vsiz t key = _vsiz t (Cs.string key) (Cs.length key)
   end
 
-  include Fun (Tclist_list)
+  include Fun (Cstr_string) (Tclist_list)
 end
 
 module BDBCUR =
