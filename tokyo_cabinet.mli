@@ -214,17 +214,26 @@ sig
 
   type t
 
-  val new_ : BDB.t -> t
+  module type Sig =
+  sig
+    type cstr_t
 
-  val first : t -> unit
-  val jump : t -> string -> unit
-  val key : t -> string
-  val last : t -> unit
-  val next : t -> unit
-  val out : t -> unit
-  val prev : t -> unit
-  val put : t -> string -> cpmode -> unit
-  val val_ : t -> string
+    val new_ : BDB.t -> t
+  
+    val first : t -> unit
+    val jump : t -> cstr_t -> unit
+    val key : t -> cstr_t
+    val last : t -> unit
+    val next : t -> unit
+    val out : t -> unit
+    val prev : t -> unit
+    val put : t -> cstr_t -> cpmode -> unit
+    val val_ : t -> cstr_t
+  end
+
+  include Sig with type cstr_t = string
+
+  module Fun (Cs : Cstr_t) : Sig with type cstr_t = Cs.t
 end
 
 module FDB :

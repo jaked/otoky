@@ -510,17 +510,42 @@ struct
 
   type t
 
-  let new_ bdb = failwith "unimplemented"
+  module type Sig =
+  sig
+    type cstr_t
 
-  let first t = failwith "unimplemented"
-  let jump t key = failwith "unimplemented"
-  let key t = failwith "unimplemented"
-  let last t = failwith "unimplemented"
-  let next t = failwith "unimplemented"
-  let out t = failwith "unimplemented"
-  let prev t = failwith "unimplemented"
-  let put t value cpmode = failwith "unimplemented"
-  let val_ t = failwith "unimplemented"
+    val new_ : BDB.t -> t
+  
+    val first : t -> unit
+    val jump : t -> cstr_t -> unit
+    val key : t -> cstr_t
+    val last : t -> unit
+    val next : t -> unit
+    val out : t -> unit
+    val prev : t -> unit
+    val put : t -> cstr_t -> cpmode -> unit
+    val val_ : t -> cstr_t
+  end
+
+  module Fun (Cs : Cstr_t) =
+  struct
+    type cstr_t = Cs.t
+
+    let new_ bdb = failwith "unimplemented"
+    (* external new_ : BDB.t -> t = "otoky_bdbcur_new" *)
+  
+    let first t = failwith "unimplemented"
+    let jump t key = failwith "unimplemented"
+    let key t = failwith "unimplemented"
+    let last t = failwith "unimplemented"
+    let next t = failwith "unimplemented"
+    let out t = failwith "unimplemented"
+    let prev t = failwith "unimplemented"
+    let put t value cpmode = failwith "unimplemented"
+    let val_ t = failwith "unimplemented"
+  end
+
+  include Fun (Cstr_string)
 end
 
 module FDB =
