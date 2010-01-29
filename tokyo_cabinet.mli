@@ -219,7 +219,7 @@ sig
     type cstr_t
 
     val new_ : BDB.t -> t
-  
+
     val first : t -> unit
     val jump : t -> cstr_t -> unit
     val key : t -> cstr_t
@@ -227,7 +227,7 @@ sig
     val next : t -> unit
     val out : t -> unit
     val prev : t -> unit
-    val put : t -> cstr_t -> cpmode -> unit
+    val put : t -> ?cpmode:cpmode -> cstr_t -> unit
     val val_ : t -> cstr_t
   end
 

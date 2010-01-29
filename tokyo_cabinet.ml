@@ -515,7 +515,7 @@ struct
     type cstr_t
 
     val new_ : BDB.t -> t
-  
+
     val first : t -> unit
     val jump : t -> cstr_t -> unit
     val key : t -> cstr_t
@@ -523,7 +523,7 @@ struct
     val next : t -> unit
     val out : t -> unit
     val prev : t -> unit
-    val put : t -> cstr_t -> cpmode -> unit
+    val put : t -> ?cpmode:cpmode -> cstr_t -> unit
     val val_ : t -> cstr_t
   end
 
@@ -531,18 +531,34 @@ struct
   struct
     type cstr_t = Cs.t
 
-    let new_ bdb = failwith "unimplemented"
-    (* external new_ : BDB.t -> t = "otoky_bdbcur_new" *)
-  
-    let first t = failwith "unimplemented"
-    let jump t key = failwith "unimplemented"
-    let key t = failwith "unimplemented"
-    let last t = failwith "unimplemented"
-    let next t = failwith "unimplemented"
-    let out t = failwith "unimplemented"
-    let prev t = failwith "unimplemented"
-    let put t value cpmode = failwith "unimplemented"
-    let val_ t = failwith "unimplemented"
+    external new_ : BDB.t -> t = "otoky_bdbcur_new"
+
+    external first : t -> unit = "otoky_bdbcur_first"
+
+    external _jump : t -> string -> int -> unit = "otoky_bdbcur_jump"
+    let jump t key = _jump t (Cs.string key) (Cs.length key)
+
+    external _key : t -> Cstr.t = "otoky_bdbcur_key"
+    let key t =
+      let cstr = _key t in
+      let r = Cs.of_cstr cstr in
+      if Cs.del then Cstr.del cstr;
+      r
+
+    external last : t -> unit = "otoky_bdbcur_last"
+    external next : t -> unit = "otoky_bdbcur_next"
+    external out : t -> unit = "otoky_bdbcur_out"
+    external prev : t -> unit = "otoky_bdbcur_prev"
+
+    external _put : t -> ?cpmode:cpmode -> string -> int -> unit = "otoky_bdbcur_put"
+    let put t ?cpmode val_ = _put t ?cpmode (Cs.string val_) (Cs.length val_)
+
+    external _val : t -> Cstr.t = "otoky_bdbcur_val"
+    let val_ t =
+      let cstr = _val t in
+      let r = Cs.of_cstr cstr in
+      if Cs.del then Cstr.del cstr;
+      r
   end
 
   include Fun (Cstr_string)

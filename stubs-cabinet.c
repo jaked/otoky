@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdarg.h>
 
 #include <caml/mlvalues.h>
 #include <caml/alloc.h>
@@ -9,43 +10,42 @@
 
 #include <tcadb.h>
 
-enum error {
-  Ethread,
-  Einvalid,
-  Enofile,
-  Enoperm,
-  Emeta,
-  Erhead,
-  Eopen,
-  Eclose,
-  Etrunc,
-  Esync,
-  Estat,
-  Eseek,
-  Eread,
-  Ewrite,
-  Emmap,
-  Elock,
-  Eunlink,
-  Erename,
-  Emkdir,
-  Ermdir,
-  Ekeep,
-  Enorec,
-  Emisc
-};
+
+
+#define int_option(v) ((v == Val_int(0)) ? -1 : Int_val(Field(v, 0)))
+#define int32_option(v) ((v == Val_int(0)) ? (int32)-1 : Int32_val(Field(v, 0)))
+#define int64_option(v) ((v == Val_int(0)) ? (int64)-1 : Int64_val(Field(v, 0)))
+#define string_option(v) ((v == Val_int(0)) ? NULL : String_val(Field(v, 0)))
+#define bool_option(v) ((v == Val_int(0)) ? false : Bool_val(Field(v, 0)))
+
+static value copy_string_length(const void *s, int len)
+{
+  value res = caml_alloc_string(len);
+  memmove(String_val(res), s, len);
+  return res;
+}
+
+
 
 static value *error_exn = NULL;
 
-static void raise_error_exn(int con, const char *fn_name, const char *err_msg)
+static void raise_error_exn(int ecode, const char *fn_name)
 {
   CAMLlocal3(vfn_name, verr_msg, vexn);
 
   if (!error_exn) {
     error_exn = caml_named_value("Tokyo_cabinet.Error");
     if (!error_exn)
-      invalid_argument("Exception Tokyo_cabinet.Error not initialized");
+      caml_invalid_argument("Exception Tokyo_cabinet.Error not initialized");
   }
+
+  /*
+    NB:
+    error constructors are one less than TC ecodes because there's no Esuccess;
+    TCENOREC is the highest ecode and also the constructor for Emisc
+  */
+  int con = (ecode > 0 && ecode <= TCENOREC) ? ecode - 1 : TCENOREC;
+  const char *err_msg = tcerrmsg(ecode);
 
   vfn_name = caml_copy_string(fn_name);
   verr_msg = caml_copy_string(err_msg);
@@ -124,19 +124,6 @@ static int opt_int_of_list(value v)
   }
 }
 
-#define int_option(v) ((v == Val_int(0)) ? -1 : Int_val(Field(v, 0)))
-#define int32_option(v) ((v == Val_int(0)) ? (int32)-1 : Int32_val(Field(v, 0)))
-#define int64_option(v) ((v == Val_int(0)) ? (int64)-1 : Int64_val(Field(v, 0)))
-#define string_option(v) ((v == Val_int(0)) ? NULL : String_val(Field(v, 0)))
-#define bool_option(v) ((v == Val_int(0)) ? false : Bool_val(Field(v, 0)))
-
-static value copy_string_length(const void *s, int len)
-{
-  value res = caml_alloc_string(len);
-  memmove(String_val(res), s, len);
-  return res;
-}
-
 
 
 CAMLprim
@@ -194,401 +181,327 @@ value otoky_tclist_bsearch(TCLIST *tclist, value vstring, value vlen)
 
 
 
+/* XXX could do away with this struct */
 typedef struct adb_wrap {
   TCADB *adb;
-  bool open;
 } adb_wrap;
 
 #define adb_wrap_val(v) (*((adb_wrap **)(Data_custom_val(v))))
 
-static void adb_set_open(value vadb, bool open)
-{
-  adb_wrap_val(vadb)->open = open;
-}
-
 static void adb_finalize(value vadb)
 {
   adb_wrap *adbw = adb_wrap_val(vadb);
-  if (adbw->open)
-  {
-    caml_enter_blocking_section();
-    (void)tcadbclose(adbw->adb);
-    caml_leave_blocking_section();
-    adbw->open = false;
-    free(adbw);
-  }
+  caml_enter_blocking_section();
+  (void)tcadbclose(adbw->adb);
+  caml_leave_blocking_section();
+  free(adbw);
 }
 
-static value adb_alloc(TCADB *adb)
-{
-  adb_wrap *adbw;
-  value vres = caml_alloc_final(2, adb_finalize, 1, 100);
-  adb_wrap_val(vres) = NULL;
-  adbw = caml_stat_alloc(sizeof(adb_wrap));
-  adbw->adb = adb;
-  adbw->open = false;
-  adb_wrap_val(vres) = adbw;
-  return vres;
-}
-
-static void adb_error(TCADB *adb, const char *fn_name)
+static void adb_error(adb_wrap *adbw, const char *fn_name)
 {
   /* huh, there is no way to get the error code with ADB */
-  raise_error_exn(Emisc, fn_name, "");
-}
-
-static TCADB *adb_ptr(value vadb, bool open, const char *fn_name)
-{
-  adb_wrap *adbw = adb_wrap_val(vadb);
-  if (open && !adbw->open) {
-    char buf[80];
-    sprintf(buf, "%s: handle is closed", fn_name);
-    caml_invalid_argument(buf);
-  }
-  else if (!open && adbw->open) {
-    char buf[80];
-    sprintf(buf, "%s: handle is open", fn_name);
-    caml_invalid_argument(buf);
-  }
-  return adbw->adb;
+  raise_error_exn(TCEMISC, fn_name);
 }
 
 CAMLprim
 value otoky_adb_new(value unit)
 {
   TCADB *adb = tcadbnew();
-  return adb_alloc(adb);
+  adb_wrap *adbw;
+  value vadb = caml_alloc_final(2, adb_finalize, 1, 100);
+  adbw = caml_stat_alloc(sizeof(adb_wrap));
+  adbw->adb = adb;
+  adb_wrap_val(vadb) = adbw;
+  return vadb;
 }
 
 CAMLprim
 value otoky_adb_adddouble(value vadb, value vkey, value vlen, value vnum)
 {
-  const char *fn_name = "adddouble";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   double num;
   caml_enter_blocking_section();
-  num = tcadbadddouble(adb, String_val(vkey), Int_val(vlen), Double_val(vnum));
+  num = tcadbadddouble(adbw->adb, String_val(vkey), Int_val(vlen), Double_val(vnum));
   caml_leave_blocking_section();
-  if (isnan(num))
-    adb_error(adb, fn_name);
+  if (isnan(num)) adb_error(adbw, "adddouble");
   return caml_copy_double (num);
 }
 
 CAMLprim
 value otoky_adb_addint(value vadb, value vkey, value vlen, value vnum)
 {
-  const char *fn_name = "addint";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   int num;
   caml_enter_blocking_section();
-  num = tcadbaddint(adb, String_val(vkey), Int_val(vlen), Int_val(vnum));
+  num = tcadbaddint(adbw->adb, String_val(vkey), Int_val(vlen), Int_val(vnum));
   caml_leave_blocking_section();
-  if (num == INT_MIN)
-    adb_error(adb, fn_name);
+  if (num == INT_MIN) adb_error(adbw, "addint");
   return Val_int (num);
 }
 
 CAMLprim
 value otoky_adb_close(value vadb)
 {
-  const char *fn_name = "close";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbclose(adb);
+  r = tcadbclose(adbw->adb);
   caml_leave_blocking_section();
-  adb_set_open(vadb, false);
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "close");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_copy(value vadb, value vpath)
 {
-  const char *fn_name = "copy";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbcopy(adb, String_val(vpath));
+  r = tcadbcopy(adbw->adb, String_val(vpath));
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "copy");
   return Val_unit;
 }
 
 CAMLprim
 TCLIST *otoky_adb_fwmkeys(value vadb, value vmax, value vprefix, value vlen)
 {
-  const char *fn_name = "fwmkeys";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   TCLIST *tclist;
   caml_enter_blocking_section();
-  tclist = tcadbfwmkeys(adb, String_val(vprefix), Int_val(vlen), int_option(vmax));
+  tclist = tcadbfwmkeys(adbw->adb, String_val(vprefix), Int_val(vlen), int_option(vmax));
   caml_leave_blocking_section();
+  if (!tclist) adb_error(adbw, "fwmkeys");
   return tclist;
 }
 
 CAMLprim
 value otoky_adb_get(value vadb, value vkey, value vlen)
 {
-  const char *fn_name = "get";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   void *val;
   int len;
   caml_enter_blocking_section();
-  val = tcadbget(adb, String_val(vkey), Int_val(vlen), &len);
+  val = tcadbget(adbw->adb, String_val(vkey), Int_val(vlen), &len);
   caml_leave_blocking_section();
-  if (!val) caml_raise_not_found ();
+  if (!val) adb_error(adbw, "get");
   return make_cstr(val, Val_int(len));
 }
 
 CAMLprim
 value otoky_adb_iterinit(value vadb)
 {
-  const char *fn_name = "iterinit";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbiterinit(adb);
+  r = tcadbiterinit(adbw->adb);
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "iterinit");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_iternext(value vadb)
 {
-  const char *fn_name = "iternext";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   void *val;
   int len;
   caml_enter_blocking_section();
-  val = tcadbiternext(adb, &len);
+  val = tcadbiternext(adbw->adb, &len);
   caml_leave_blocking_section();
-  if (!val) caml_raise_not_found ();
+  if (!val) adb_error(adbw, "iternext");
   return make_cstr(val, Val_int(len));
 }
 
 CAMLprim
 TCLIST *otoky_adb_misc(value vadb, value vname, TCLIST *args)
 {
-  const char *fn_name = "misc";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   TCLIST *r;
   caml_enter_blocking_section();
-  r = tcadbmisc(adb, String_val(vname), args);
+  r = tcadbmisc(adbw->adb, String_val(vname), args);
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "misc");
   return r;
 }
 
 CAMLprim
 value otoky_adb_open(value vadb, value vname)
 {
-  const char *fn_name = "open";
-  TCADB *adb = adb_ptr(vadb, false, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbopen(adb, String_val(vname));
+  r = tcadbopen(adbw->adb, String_val(vname));
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
-  adb_set_open(vadb, true);
+  if (!r) adb_error(adbw, "open");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_optimize(value vadb, value vparams, value vunit)
 {
-  const char *fn_name = "optimize";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadboptimize(adb, string_option(vparams));
+  r = tcadboptimize(adbw->adb, string_option(vparams));
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "optimize");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_out(value vadb, value vkey, value vlen)
 {
-  const char *fn_name = "out";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbout(adb, String_val(vkey), Int_val(vlen));
+  r = tcadbout(adbw->adb, String_val(vkey), Int_val(vlen));
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "out");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_path(value vadb)
 {
-  const char *fn_name = "path";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   const char* path;
   caml_enter_blocking_section();
-  path = tcadbpath(adb);
+  path = tcadbpath(adbw->adb);
   caml_leave_blocking_section();
-  if (!path) /* shouldn't happen */
-    caml_raise_not_found();
+  if (!path) adb_error(adbw, "path");
   return caml_copy_string(path);
 }
 
 CAMLprim
 value otoky_adb_put(value vadb, value vkey, value vkeylen, value vval, value vvallen)
 {
-  const char *fn_name = "put";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbput(adb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  r = tcadbput(adbw->adb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "put");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_putcat(value vadb, value vkey, value vkeylen, value vval, value vvallen)
 {
-  const char *fn_name = "putcat";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbputcat(adb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  r = tcadbputcat(adbw->adb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "putcat");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_putkeep(value vadb, value vkey, value vkeylen, value vval, value vvallen)
 {
-  const char *fn_name = "putkeep";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbputkeep(adb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  r = tcadbputkeep(adbw->adb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "putkeep");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_rnum(value vadb)
 {
-  const char *fn_name = "rnum";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   uint64_t r;
   caml_enter_blocking_section();
-  r = tcadbrnum(adb);
+  r = tcadbrnum(adbw->adb);
   caml_leave_blocking_section();
+  if (!r) adb_error(adbw, "rnum");
   return caml_copy_int64(r);
 }
 
 CAMLprim
 value otoky_adb_size(value vadb)
 {
-  const char *fn_name = "size";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   uint64_t r;
   caml_enter_blocking_section();
-  r = tcadbsize(adb);
+  r = tcadbsize(adbw->adb);
   caml_leave_blocking_section();
+  if (!r) adb_error(adbw, "size");
   return caml_copy_int64(r);
 }
 
 CAMLprim
 value otoky_adb_sync(value vadb)
 {
-  const char *fn_name = "sync";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbsync(adb);
+  r = tcadbsync(adbw->adb);
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "sync");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_tranabort(value vadb)
 {
-  const char *fn_name = "tranabort";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbtranabort(adb);
+  r = tcadbtranabort(adbw->adb);
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "tranabort");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_tranbegin(value vadb)
 {
-  const char *fn_name = "tranbegin";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbtranbegin(adb);
+  r = tcadbtranbegin(adbw->adb);
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "tranbegin");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_trancommit(value vadb)
 {
-  const char *fn_name = "trancommit";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbtrancommit(adb);
+  r = tcadbtrancommit(adbw->adb);
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "trancommit");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_vanish(value vadb)
 {
-  const char *fn_name = "vanish";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   bool r;
   caml_enter_blocking_section();
-  r = tcadbvanish(adb);
+  r = tcadbvanish(adbw->adb);
   caml_leave_blocking_section();
-  if (!r)
-    adb_error(adb, fn_name);
+  if (!r) adb_error(adbw, "vanish");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_adb_vsiz(value vadb, value vkey, value vkeylen)
 {
-  const char *fn_name = "vsiz";
-  TCADB *adb = adb_ptr(vadb, true, fn_name);
+  adb_wrap *adbw = adb_wrap_val(vadb);
   int r;
   caml_enter_blocking_section();
-  r = tcadbvsiz(adb, String_val(vkey), Int_val(vkeylen));
+  r = tcadbvsiz(adbw->adb, String_val(vkey), Int_val(vkeylen));
   caml_leave_blocking_section();
-  if (r == -1)
-    adb_error(adb, fn_name);
+  if (r == -1) adb_error(adbw, "vsiz");
   return Val_int(r);
 }
 
@@ -596,226 +509,186 @@ value otoky_adb_vsiz(value vadb, value vkey, value vkeylen)
 
 typedef struct bdb_wrap {
   TCBDB *bdb;
-  bool open;
+  int ref_count;
   value cmpfunc;
 } bdb_wrap;
 
 #define bdb_wrap_val(v) (*((bdb_wrap **)(Data_custom_val(v))))
 
-static void bdb_clear_cmpfunc(value vbdb)
+static void bdb_clear_cmpfunc(bdb_wrap *bdbw)
 {
-  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   if (bdbw->cmpfunc != Val_unit) {
     caml_remove_global_root(&bdbw->cmpfunc);
     bdbw->cmpfunc = Val_unit;
   }
 }
 
-static void bdb_set_cmpfunc(value vbdb, value vcmpfunc)
+static void bdb_set_cmpfunc(bdb_wrap *bdbw, value vcmpfunc)
 {
-  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
-  bdb_clear_cmpfunc(vbdb);
+  bdb_clear_cmpfunc(bdbw);
   bdbw->cmpfunc = vcmpfunc;
   caml_register_global_root(&bdbw->cmpfunc);
 }
 
-static void bdb_set_open(value vbdb, bool open)
+static void bdb_decr_ref_count(bdb_wrap *bdbw)
 {
-  bdb_wrap_val(vbdb)->open = open;
+  if (--bdbw->ref_count == 0) {
+    caml_enter_blocking_section();
+    (void)tcbdbclose(bdbw->bdb);
+    caml_leave_blocking_section();
+    bdb_clear_cmpfunc(bdbw);
+    tcbdbdel(bdbw->bdb);
+    free(bdbw);
+  }
 }
 
 static void bdb_finalize(value vbdb)
 {
   bdb_wrap *bdbw = bdb_wrap_val(vbdb);
-  if (bdbw->open)
-  {
-    caml_enter_blocking_section();
-    (void)tcbdbclose(bdbw->bdb);
-    caml_leave_blocking_section();
-    bdbw->open = false;
-    bdb_clear_cmpfunc(vbdb);
-  }
+  bdb_decr_ref_count(bdbw);
 }
 
-static value bdb_alloc(TCBDB *bdb)
+static void bdb_error(bdb_wrap *bdbw, const char *fn_name)
 {
-  bdb_wrap *bdbw;
-  value vres = caml_alloc_final(2, bdb_finalize, 1, 100);
-  bdb_wrap_val(vres) = NULL;
-  bdbw = caml_stat_alloc(sizeof(bdb_wrap));
-  bdbw->bdb = bdb;
-  bdbw->open = false;
-  bdbw->cmpfunc = Val_unit;
-  bdb_wrap_val(vres) = bdbw;
-  return vres;
-}
-
-static void bdb_error(TCBDB *bdb, const char *fn_name)
-{
-  /* XXX fix for BDB */
-  raise_error_exn(Emisc, fn_name, "");
-}
-
-static TCBDB *bdb_ptr(value vbdb, bool open, const char *fn_name)
-{
-  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
-  if (open && !bdbw->open) {
-    char buf[80];
-    sprintf(buf, "%s: handle is closed", fn_name);
-    caml_invalid_argument(buf);
-  }
-  else if (!open && bdbw->open) {
-    char buf[80];
-    sprintf(buf, "%s: handle is open", fn_name);
-    caml_invalid_argument(buf);
-  }
-  return bdbw->bdb;
+  raise_error_exn(tcbdbecode(bdbw->bdb), fn_name);
 }
 
 CAMLprim
 value otoky_bdb_new(value unit)
 {
   TCBDB *bdb = tcbdbnew();
+  bdb_wrap *bdbw;
+  value vbdb = caml_alloc_final(2, bdb_finalize, 1, 100);
   tcbdbsetmutex(bdb); /* XXX does this affect performance for single-threaded code? */
-  return bdb_alloc(bdb);
+  bdbw = caml_stat_alloc(sizeof(bdb_wrap));
+  bdbw->bdb = bdb;
+  bdbw->ref_count = 1;
+  bdbw->cmpfunc = Val_unit;
+  bdb_wrap_val(vbdb) = bdbw;
+  return vbdb;
 }
 
 CAMLprim
 value otoky_bdb_adddouble(value vbdb, value vkey, value vlen, value vnum)
 {
-  const char *fn_name = "adddouble";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   double num;
   caml_enter_blocking_section();
-  num = tcbdbadddouble(bdb, String_val(vkey), Int_val(vlen), Double_val(vnum));
+  num = tcbdbadddouble(bdbw->bdb, String_val(vkey), Int_val(vlen), Double_val(vnum));
   caml_leave_blocking_section();
-  if (isnan(num))
-    bdb_error(bdb, fn_name);
-  return caml_copy_double (num);
+  if (isnan(num)) bdb_error(bdbw, "adddouble");
+  return caml_copy_double(num);
 }
 
 CAMLprim
 value otoky_bdb_addint(value vbdb, value vkey, value vlen, value vnum)
 {
-  const char *fn_name = "addint";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   int num;
   caml_enter_blocking_section();
-  num = tcbdbaddint(bdb, String_val(vkey), Int_val(vlen), Int_val(vnum));
+  num = tcbdbaddint(bdbw->bdb, String_val(vkey), Int_val(vlen), Int_val(vnum));
   caml_leave_blocking_section();
-  if (num == INT_MIN)
-    bdb_error(bdb, fn_name);
+  if (num == INT_MIN) bdb_error(bdbw, "addint");
   return Val_int (num);
 }
 
 CAMLprim
 value otoky_bdb_close(value vbdb)
 {
-  const char *fn_name = "close";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbclose(bdb);
+  r = tcbdbclose(bdbw->bdb);
   caml_leave_blocking_section();
-  bdb_set_open(vbdb, false);
-  bdb_clear_cmpfunc(vbdb);
-  if (!r)
-    bdb_error(bdb, fn_name);
+  bdb_clear_cmpfunc(bdbw);
+  if (!r) bdb_error(bdbw, "close");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_copy(value vbdb, value vpath)
 {
-  const char *fn_name = "copy";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbcopy(bdb, String_val(vpath));
+  r = tcbdbcopy(bdbw->bdb, String_val(vpath));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "copy");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_fsiz(value vbdb)
 {
-  const char *fn_name = "fsiz";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   uint64_t r;
   caml_enter_blocking_section();
-  r = tcbdbfsiz(bdb);
+  r = tcbdbfsiz(bdbw->bdb);
   caml_leave_blocking_section();
+  if (!r) bdb_error(bdbw, "fsiz");
   return caml_copy_int64(r);
 }
 
 CAMLprim
 TCLIST *otoky_bdb_fwmkeys(value vbdb, value vmax, value vprefix, value vlen)
 {
-  const char *fn_name = "fwmkeys";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   TCLIST *tclist;
   caml_enter_blocking_section();
-  tclist = tcbdbfwmkeys(bdb, String_val(vprefix), Int_val(vlen), int_option(vmax));
+  tclist = tcbdbfwmkeys(bdbw->bdb, String_val(vprefix), Int_val(vlen), int_option(vmax));
   caml_leave_blocking_section();
+  if (!tclist) bdb_error(bdbw, "fwmkeys");
   return tclist;
 }
 
 CAMLprim
 value otoky_bdb_get(value vbdb, value vkey, value vlen)
 {
-  const char *fn_name = "get";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   void *val;
   int len;
   caml_enter_blocking_section();
-  val = tcbdbget(bdb, String_val(vkey), Int_val(vlen), &len);
+  val = tcbdbget(bdbw->bdb, String_val(vkey), Int_val(vlen), &len);
   caml_leave_blocking_section();
-  if (!val) caml_raise_not_found ();
+  if (!val) bdb_error(bdbw, "get");
   return make_cstr(val, Val_int(len));
 }
 
 CAMLprim
 TCLIST *otoky_bdb_getlist(value vbdb, value vkey, value vlen)
 {
-  const char *fn_name = "getlist";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   TCLIST *tclist;
   caml_enter_blocking_section();
-  tclist = tcbdbget4(bdb, String_val(vkey), Int_val(vlen));
+  tclist = tcbdbget4(bdbw->bdb, String_val(vkey), Int_val(vlen));
   caml_leave_blocking_section();
+  if (!tclist) bdb_error(bdbw, "getlist");
   return tclist;
 }
 
 CAMLprim
 value otoky_bdb_open(value vbdb, value vmode, value vname)
 {
-  const char *fn_name = "open";
-  TCBDB *bdb = bdb_ptr(vbdb, false, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbopen(bdb, String_val(vname), omode_int_of_list(vmode));
+  r = tcbdbopen(bdbw->bdb, String_val(vname), omode_int_of_list(vmode));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
-  bdb_set_open(vbdb, true);
+  if (!r) bdb_error(bdbw, "open");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_optimize(value vbdb, value vlmemb, value vnmemb, value vbnum, value vapow, value vfpow, value vopts, value vunit)
 {
-  const char *fn_name = "optimize";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdboptimize(bdb,
+  r = tcbdboptimize(bdbw->bdb,
                     int32_option(vlmemb), int32_option(vnmemb), int64_option(vbnum),
                     int_option(vapow), int_option(vfpow), opt_int_of_list(vopts));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "optimize");
   return Val_unit;
 }
 
@@ -828,129 +701,111 @@ value otoky_bdb_optimize_bc(value *argv, int argn)
 CAMLprim
 value otoky_bdb_out(value vbdb, value vkey, value vlen)
 {
-  const char *fn_name = "out";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbout(bdb, String_val(vkey), Int_val(vlen));
+  r = tcbdbout(bdbw->bdb, String_val(vkey), Int_val(vlen));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "out");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_outlist(value vbdb, value vkey, value vlen)
 {
-  const char *fn_name = "outlist";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbout3(bdb, String_val(vkey), Int_val(vlen));
+  r = tcbdbout3(bdbw->bdb, String_val(vkey), Int_val(vlen));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "outlist");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_path(value vbdb)
 {
-  const char *fn_name = "path";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   const char* path;
   caml_enter_blocking_section();
-  path = tcbdbpath(bdb);
+  path = tcbdbpath(bdbw->bdb);
   caml_leave_blocking_section();
-  if (!path) /* shouldn't happen */
-    caml_raise_not_found();
+  if (!path) bdb_error(bdbw, "path");
   return caml_copy_string(path);
 }
 
 CAMLprim
 value otoky_bdb_put(value vbdb, value vkey, value vkeylen, value vval, value vvallen)
 {
-  const char *fn_name = "put";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbput(bdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  r = tcbdbput(bdbw->bdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "put");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_putcat(value vbdb, value vkey, value vkeylen, value vval, value vvallen)
 {
-  const char *fn_name = "putcat";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbputcat(bdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  r = tcbdbputcat(bdbw->bdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "putcat");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_putdup(value vbdb, value vkey, value vkeylen, value vval, value vvallen)
 {
-  const char *fn_name = "putdup";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbputdup(bdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  r = tcbdbputdup(bdbw->bdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "putdup");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_putkeep(value vbdb, value vkey, value vkeylen, value vval, value vvallen)
 {
-  const char *fn_name = "putkeep";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbputkeep(bdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  r = tcbdbputkeep(bdbw->bdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "putkeep");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_putlist(value vbdb, value vkey, value vlen, TCLIST *tclist)
 {
-  const char *fn_name = "putlist";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbputdup3(bdb, String_val(vkey), Int_val(vlen), tclist);
+  r = tcbdbputdup3(bdbw->bdb, String_val(vkey), Int_val(vlen), tclist);
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "putlist");
   return Val_unit;
 }
 
 CAMLprim
 TCLIST *otoky_bdb_range(value vbdb, value vbkey, value vblen, value vbinc, value vekey, value velen, value veinc, value vmax, value vunit)
 {
-  const char *fn_name = "range";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   TCLIST *tclist;
   caml_enter_blocking_section();
-  tclist = tcbdbrange(bdb,
+  tclist = tcbdbrange(bdbw->bdb,
                       string_option(vbkey), Int_val(vblen), bool_option(vbinc),
                       string_option(vekey), Int_val(velen), bool_option(veinc),
                       int_option(vmax));
   caml_leave_blocking_section();
-  if (!tclist)
-    bdb_error(bdb, fn_name);
+  if (!tclist) bdb_error(bdbw, "range");
   return tclist;
 }
 
@@ -963,26 +818,24 @@ TCLIST *otoky_bdb_range_bc(value *argv, int argn)
 CAMLprim
 value otoky_bdb_rnum(value vbdb)
 {
-  const char *fn_name = "rnum";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   uint64_t r;
   caml_enter_blocking_section();
-  r = tcbdbrnum(bdb);
+  r = tcbdbrnum(bdbw->bdb);
   caml_leave_blocking_section();
+  if (!r) bdb_error(bdbw, "rnum");
   return caml_copy_int64(r);
 }
 
 CAMLprim
 value otoky_bdb_setcache(value vbdb, value vlcnum, value vncnum, value vunit)
 {
-  const char *fn_name = "setcache";
-  TCBDB *bdb = bdb_ptr(vbdb, false, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbsetcache(bdb, int32_option(vlcnum), int32_option(vncnum));
+  r = tcbdbsetcache(bdbw->bdb, int32_option(vlcnum), int32_option(vncnum));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "setcache");
   return Val_unit;
 }
 
@@ -1025,11 +878,9 @@ static int cmp_custom_cstr(const char *aptr, int asiz, const char *bptr, int bsi
 CAMLprim
 value otoky_bdb_setcmpfunc(value vbdb, value vcmpfunc)
 {
-  const char *fn_name = "setcmpfunc";
-  TCBDB *bdb = bdb_ptr(vbdb, false, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   TCCMP cmp = NULL;
-  void *cmpop = NULL;
 
   if (Is_long(vcmpfunc)) {
     switch (Int_val(vcmpfunc)) {
@@ -1037,125 +888,107 @@ value otoky_bdb_setcmpfunc(value vbdb, value vcmpfunc)
     case Cmp_decimal: cmp = tccmpdecimal; break;
     case Cmp_int32:   cmp = tccmpint32;   break;
     case Cmp_int64:   cmp = tccmpint64;   break;
-    default: break;
     }
-    bdb_clear_cmpfunc(vbdb);
+    bdb_clear_cmpfunc(bdbw);
   }
   else {
     switch (Tag_val(vcmpfunc)) {
     case Cmp_custom:      cmp = (TCCMP)cmp_custom;      break;
     case Cmp_custom_cstr: cmp = (TCCMP)cmp_custom_cstr; break;
-    default: break;
     }
-    cmpop = (void *)bdb_wrap_val(vbdb);
-    bdb_set_cmpfunc(vbdb, Field(vcmpfunc, 0));
+    bdb_set_cmpfunc(bdbw, Field(vcmpfunc, 0));
   }
 
   caml_enter_blocking_section();
-  r = tcbdbsetcmpfunc(bdb, cmp, cmpop);
+  r = tcbdbsetcmpfunc(bdbw->bdb, cmp, (void *)bdbw);
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "setcmpfunc");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_setdfunit(value vbdb, value vdfunit)
 {
-  const char *fn_name = "setdfunit";
-  TCBDB *bdb = bdb_ptr(vbdb, false, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbsetdfunit(bdb, Int32_val(vdfunit));
+  r = tcbdbsetdfunit(bdbw->bdb, Int32_val(vdfunit));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "setdfunit");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_setxmsiz(value vbdb, value vxmsiz)
 {
-  const char *fn_name = "setxmsiz";
-  TCBDB *bdb = bdb_ptr(vbdb, false, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbsetxmsiz(bdb, Int32_val(vxmsiz));
+  r = tcbdbsetxmsiz(bdbw->bdb, Int32_val(vxmsiz));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "setxmsiz");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_sync(value vbdb)
 {
-  const char *fn_name = "sync";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbsync(bdb);
+  r = tcbdbsync(bdbw->bdb);
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "sync");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_tranabort(value vbdb)
 {
-  const char *fn_name = "tranabort";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbtranabort(bdb);
+  r = tcbdbtranabort(bdbw->bdb);
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "tranabort");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_tranbegin(value vbdb)
 {
-  const char *fn_name = "tranbegin";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbtranbegin(bdb);
+  r = tcbdbtranbegin(bdbw->bdb);
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "tranbegin");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_trancommit(value vbdb)
 {
-  const char *fn_name = "trancommit";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbtrancommit(bdb);
+  r = tcbdbtrancommit(bdbw->bdb);
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "trancommit");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_tune(value vbdb, value vlmemb, value vnmemb, value vbnum, value vapow, value vfpow, value vopts, value vunit)
 {
-  const char *fn_name = "tune";
-  TCBDB *bdb = bdb_ptr(vbdb, false, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbtune(bdb,
+  r = tcbdbtune(bdbw->bdb,
                 int32_option(vlmemb), int32_option(vnmemb), int64_option(vbnum),
                 int_option(vapow), int_option(vfpow), opt_int_of_list(vopts));
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "tune");
   return Val_unit;
 }
 
@@ -1168,41 +1001,184 @@ value otoky_bdb_tune_bc(value *argv, int argn)
 CAMLprim
 value otoky_bdb_vanish(value vbdb)
 {
-  const char *fn_name = "vanish";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbvanish(bdb);
+  r = tcbdbvanish(bdbw->bdb);
   caml_leave_blocking_section();
-  if (!r)
-    bdb_error(bdb, fn_name);
+  if (!r) bdb_error(bdbw, "vanish");
   return Val_unit;
 }
 
 CAMLprim
 value otoky_bdb_vnum(value vbdb, value vkey, value vlen)
 {
-  const char *fn_name = "vnum";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   int r;
   caml_enter_blocking_section();
-  r = tcbdbvnum(bdb, String_val(vkey), Int_val(vlen));
+  r = tcbdbvnum(bdbw->bdb, String_val(vkey), Int_val(vlen));
   caml_leave_blocking_section();
-  if (r == -1)
-    bdb_error(bdb, fn_name);
+  if (r == -1) bdb_error(bdbw, "vnum");
   return Val_int(r);
 }
 
 CAMLprim
 value otoky_bdb_vsiz(value vbdb, value vkey, value vlen)
 {
-  const char *fn_name = "vsiz";
-  TCBDB *bdb = bdb_ptr(vbdb, true, fn_name);
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   int r;
   caml_enter_blocking_section();
-  r = tcbdbvsiz(bdb, String_val(vkey), Int_val(vlen));
+  r = tcbdbvsiz(bdbw->bdb, String_val(vkey), Int_val(vlen));
   caml_leave_blocking_section();
-  if (r == -1)
-    bdb_error(bdb, fn_name);
+  if (r == -1) bdb_error(bdbw, "vsiz");
   return Val_int(r);
+}
+
+
+
+typedef struct bdbcur_wrap {
+  BDBCUR *bdbcur;
+  bdb_wrap *bdbw;
+} bdbcur_wrap;
+
+#define bdbcur_wrap_val(v) (*((bdbcur_wrap **)(Data_custom_val(v))))
+
+static void bdbcur_finalize(value vbdbcur)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  bdb_decr_ref_count(bdbcurw->bdbw);
+  tcbdbcurdel(bdbcurw->bdbcur);
+  free(bdbcurw);
+}
+
+static void bdbcur_error(bdbcur_wrap *bdbcurw, const char *fn_name)
+{
+  /* XXX indicate errror is from BDBCUR module */
+  bdb_error(bdbcurw->bdbw, fn_name);
+}
+
+CAMLprim
+value otoky_bdbcur_new(value vbdb)
+{
+  bdb_wrap *bdbw = bdb_wrap_val(vbdb);
+  value vbdbcur;
+  bdbcur_wrap *bdbcurw;
+  vbdbcur = caml_alloc_final(2, bdbcur_finalize, 1, 100);
+  bdbcurw = caml_stat_alloc(sizeof(bdbcur_wrap));
+  bdbcurw->bdbcur = tcbdbcurnew(bdbw->bdb);
+  bdbcurw->bdbw = bdbw;
+  bdbw->ref_count++;
+  bdbcur_wrap_val(vbdbcur) = bdbcurw;
+  return vbdbcur;
+}
+
+CAMLprim
+value otoky_bdbcur_first(value vbdbcur)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  bool r;
+  caml_enter_blocking_section();
+  r = tcbdbcurfirst(bdbcurw->bdbcur);
+  caml_leave_blocking_section ();
+  if (!r) bdbcur_error(bdbcurw, "first");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_bdbcur_jump(value vbdbcur, value vkey, value vlen)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  bool r;
+  caml_enter_blocking_section();
+  r = tcbdbcurjump(bdbcurw->bdbcur, String_val(vkey), Int_val(vlen));
+  caml_leave_blocking_section();
+  if (!r) bdbcur_error(bdbcurw, "jump");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_bdbcur_key(value vbdbcur)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  int len;
+  const void *key;
+  caml_enter_blocking_section();
+  key = tcbdbcurkey(bdbcurw->bdbcur, &len);
+  caml_leave_blocking_section();
+  if (!key) bdbcur_error(bdbcurw, "key");
+  return make_cstr(key, len);
+}
+
+CAMLprim
+value otoky_bdbcur_last(value vbdbcur)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  bool r;
+  caml_enter_blocking_section();
+  r = tcbdbcurlast(bdbcurw->bdbcur);
+  caml_leave_blocking_section ();
+  if (!r) bdbcur_error(bdbcurw, "last");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_bdbcur_next(value vbdbcur)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  bool r;
+  caml_enter_blocking_section();
+  r = tcbdbcurnext(bdbcurw->bdbcur);
+  caml_leave_blocking_section ();
+  if (!r) bdbcur_error(bdbcurw, "next");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_bdbcur_out(value vbdbcur)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  bool r;
+  caml_enter_blocking_section();
+  r = tcbdbcurout(bdbcurw->bdbcur);
+  caml_leave_blocking_section ();
+  if (!r) bdbcur_error(bdbcurw, "out");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_bdbcur_prev(value vbdbcur)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  bool r;
+  caml_enter_blocking_section();
+  r = tcbdbcurprev(bdbcurw->bdbcur);
+  caml_leave_blocking_section ();
+  if (!r) bdbcur_error(bdbcurw, "prev");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_bdbcur_put(value vbdbcur, value vcpmode, value vval, value vlen)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  bool r;
+  int cpmode = (vcpmode == Val_int(0)) ? BDBCPCURRENT : Int_val(Field(vcpmode, 0));
+  caml_enter_blocking_section();
+  r = tcbdbcurput(bdbcurw->bdbcur, String_val(vval), Int_val(vlen), cpmode);
+  caml_leave_blocking_section ();
+  if (!r) bdbcur_error(bdbcurw, "put");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_bdbcur_val(value vbdbcur)
+{
+  bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
+  int len;
+  const void *val;
+  caml_enter_blocking_section();
+  val = tcbdbcurval(bdbcurw->bdbcur, &len);
+  caml_leave_blocking_section();
+  if (!val) bdbcur_error(bdbcurw, "val");
+  return make_cstr(val, len);
 }
