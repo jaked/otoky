@@ -366,7 +366,7 @@ struct
     val fwmkeys : t -> ?max:int -> cstr_t -> tclist_t
     val get : t -> cstr_t -> cstr_t
     val getlist : t -> cstr_t -> tclist_t
-    val open_ : t -> ?mode:omode list -> string -> unit
+    val open_ : t -> ?omode:omode list -> string -> unit
     val optimize : t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
     val out : t -> cstr_t -> unit
     val outlist : t -> cstr_t -> unit
@@ -430,7 +430,7 @@ struct
       if Tcl.del then Tclist.del tclist;
       r
 
-    external open_ : t -> ?mode:omode list -> string -> unit = "otoky_bdb_open"
+    external open_ : t -> ?omode:omode list -> string -> unit = "otoky_bdb_open"
     external optimize :
       t -> ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
           "otoky_bdb_optimize_bc" "otoky_bdb_optimize"
@@ -575,25 +575,26 @@ struct
 
   module type Sig =
   sig
+    type cstr_t
     type tclist_t
 
     val new_ : unit -> t
 
-    val adddouble : t -> string -> float -> float
-    val addint : t -> string -> int -> int
+    val adddouble : t -> int64 -> float -> float
+    val addint : t -> int64 -> int -> int
     val close : t -> unit
     val copy : t -> string -> unit
     val fsiz : t -> int64
-    val get : t -> int64 -> string
+    val get : t -> int64 -> cstr_t
     val iterinit : t -> unit
     val iternext : t -> int64
     val open_ : t -> ?omode:omode list -> string -> unit
     val optimize : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit
     val out : t -> int64 -> unit
     val path : t -> string
-    val put : t -> int64 -> string -> unit
-    val putcat : t -> int64 -> string -> unit
-    val putkeep : t -> int64 -> string -> unit
+    val put : t -> int64 -> cstr_t -> unit
+    val putcat : t -> int64 -> cstr_t -> unit
+    val putkeep : t -> int64 -> cstr_t -> unit
     val range : t -> ?max:int -> string -> tclist_t
     val rnum : t -> int64
     val sync : t -> unit
@@ -605,39 +606,61 @@ struct
     val vsiz : t -> int64 -> int
   end
 
-  module Fun (Tcl : Tclist_t) =
+  module Fun (Cs : Cstr_t) (Tcl : Tclist_t) =
   struct
+    type cstr_t = Cs.t
     type tclist_t = Tcl.t
 
-    let new_ () = failwith "unimplemented"
+    external new_ : unit -> t = "otoky_fdb_new"
 
-    let adddouble t key num = failwith "unimplemented"
-    let addint t key num = failwith "unimplemented"
-    let close t = failwith "unimplemented"
-    let copy t path = failwith "unimplemented"
-    let fsiz t = failwith "unimplemented"
-    let get t key = failwith "unimplemented"
-    let iterinit t = failwith "unimplemented"
-    let iternext t = failwith "unimplemented"
-    let open_ t ?omode path = failwith "unimplemented"
-    let optimize t ?width ?limsiz () = failwith "unimplemented"
-    let out t key = failwith "unimplemented"
-    let path t  = failwith "unimplemented"
-    let put t key value = failwith "unimplemented"
-    let putcat t key value = failwith "unimplemented"
-    let putkeep t key value = failwith "unimplemented"
-    let range t ?max interval = failwith "unimplemented"
-    let rnum t = failwith "unimplemented"
-    let sync t = failwith "unimplemented"
-    let tranabort t = failwith "unimplemented"
-    let tranbegin t = failwith "unimplemented"
-    let trancommit t = failwith "unimplemented"
-    let tune t ?width ?limsiz () = failwith "unimplemented"
-    let vanish t = failwith "unimplemented"
-    let vsiz t key = failwith "unimplemented"
+    external adddouble : t -> int64 -> float -> float = "otoky_fdb_adddouble"
+    external addint : t -> int64 -> int -> int = "otoky_fdb_addint"
+
+    external close : t -> unit = "otoky_fdb_close"
+    external copy : t -> string -> unit = "otoky_fdb_copy"
+    external fsiz : t -> int64 = "otoky_fdb_fsiz"
+
+    external _get : t -> int64 -> Cstr.t = "otoky_fdb_get"
+    let get t key =
+      let cstr = _get t key in
+      let r = Cs.of_cstr cstr in
+      if Cs.del then Cstr.del cstr;
+      r
+
+    external iterinit : t -> unit = "otoky_fdb_iterinit"
+    external iternext : t -> int64 = "otoky_fdb_iternext"
+    external open_ : t -> ?omode:omode list -> string -> unit = "otoky_fdb_open"
+    external optimize : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit = "otoky_fdb_optimize"
+    external out : t -> int64 -> unit = "otoky_fdb_out"
+    external path : t -> string = "otoky_fdb_path"
+
+    external _put : t -> int64 -> string -> int -> unit = "otoky_fdb_put"
+    let put t key value = _put t key (Cs.string value) (Cs.length value)
+
+    external _putcat : t -> int64 -> string -> int -> unit = "otoky_fdb_putcat"
+    let putcat t key value = _putcat t key (Cs.string value) (Cs.length value)
+
+    external _putkeep : t -> int64 -> string -> int -> unit = "otoky_fdb_putkeep"
+    let putkeep t key value = _putkeep t key (Cs.string value) (Cs.length value)
+
+    external _range : t -> ?max:int -> string -> Tclist.t = "otoky_fdb_range"
+    let range t ?max interval =
+      let tclist = _range t ?max interval in
+      let r = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      r
+
+    external rnum : t -> int64 = "otoky_fdb_rnum"
+    external sync : t -> unit = "otoky_fdb_sync"
+    external tranabort : t -> unit = "otoky_fdb_tranabort"
+    external tranbegin : t -> unit = "otoky_fdb_tranbegin"
+    external trancommit : t -> unit = "otoky_fdb_trancommit"
+    external tune : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit = "otoky_fdb_tune"
+    external vanish : t -> unit = "otoky_fdb_vanish"
+    external vsiz : t -> int64 -> int = "otoky_fdb_vsiz"
   end
 
-  include Fun (Tclist_list)
+  include Fun (Cstr_string) (Tclist_list)
 end
 
 module HDB =
