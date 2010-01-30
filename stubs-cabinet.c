@@ -27,10 +27,38 @@ static value copy_string_length(const void *s, int len)
 
 
 
+enum error {
+  Ethread,
+  Einvalid,
+  Enofile,
+  Enoperm,
+  Emeta,
+  Erhead,
+  Eopen,
+  Eclose,
+  Etrunc,
+  Esync,
+  Estat,
+  Eseek,
+  Eread,
+  Ewrite,
+  Emmap,
+  Elock,
+  Eunlink,
+  Erename,
+  Emkdir,
+  Ermdir,
+  Ekeep,
+  Enorec,
+  Emisc
+};
+
 static value *error_exn = NULL;
 
 static void raise_error_exn(int ecode, const char *fn_name)
 {
+  int con = Emisc;
+
   CAMLlocal3(vfn_name, verr_msg, vexn);
 
   if (!error_exn) {
@@ -39,16 +67,33 @@ static void raise_error_exn(int ecode, const char *fn_name)
       caml_invalid_argument("Exception Tokyo_cabinet.Error not initialized");
   }
 
-  /*
-    NB:
-    error constructors are one less than TC ecodes because there's no Esuccess;
-    TCENOREC is the highest ecode and also the constructor for Emisc
-  */
-  int con = (ecode > 0 && ecode <= TCENOREC) ? ecode - 1 : TCENOREC;
-  const char *err_msg = tcerrmsg(ecode);
+  switch (ecode) {
+  case TCETHREAD:  con = Ethread;  break;
+  case TCEINVALID: con = Einvalid; break;
+  case TCENOFILE:  con = Enofile;  break;
+  case TCENOPERM:  con = Enoperm;  break;
+  case TCEMETA:    con = Emeta;    break;
+  case TCERHEAD:   con = Erhead;   break;
+  case TCEOPEN:    con = Eopen;    break;
+  case TCECLOSE:   con = Eclose;   break;
+  case TCETRUNC:   con = Etrunc;   break;
+  case TCESYNC:    con = Esync;    break;
+  case TCESTAT:    con = Estat;    break;
+  case TCESEEK:    con = Eseek;    break;
+  case TCEREAD:    con = Eread;    break;
+  case TCEWRITE:   con = Ewrite;   break;
+  case TCEMMAP:    con = Emmap;    break;
+  case TCELOCK:    con = Elock;    break;
+  case TCEUNLINK:  con = Eunlink;  break;
+  case TCERENAME:  con = Erename;  break;
+  case TCEMKDIR:   con = Emkdir;   break;
+  case TCERMDIR:   con = Ermdir;   break;
+  case TCEKEEP:    con = Ekeep;    break;
+  case TCENOREC:   con = Enorec;   break;
+  }
 
   vfn_name = caml_copy_string(fn_name);
-  verr_msg = caml_copy_string(err_msg);
+  verr_msg = caml_copy_string(tcerrmsg(ecode));
 
   vexn = caml_alloc_small(4, 0);
   Field(vexn, 0) = *error_exn;
@@ -1157,12 +1202,25 @@ value otoky_bdbcur_prev(value vbdbcur)
   return Val_unit;
 }
 
+enum cpmode {
+  Cp_current,
+  Cp_before,
+  Cp_after
+};
+
 CAMLprim
 value otoky_bdbcur_put(value vbdbcur, value vcpmode, value vval, value vlen)
 {
   bdbcur_wrap *bdbcurw = bdbcur_wrap_val(vbdbcur);
   bool r;
-  int cpmode = (vcpmode == Val_int(0)) ? BDBCPCURRENT : Int_val(Field(vcpmode, 0));
+  int cpmode = BDBCPCURRENT;
+  if (vcpmode != Val_int(0)) {
+    switch (Int_val(Field(vcpmode, 0))) {
+    case Cp_current: cpmode = BDBCPCURRENT; break;
+    case Cp_before:  cpmode = BDBCPBEFORE;  break;
+    case Cp_after:   cpmode = BDBCPAFTER;   break;
+    }
+  }
   caml_enter_blocking_section();
   r = tcbdbcurput(bdbcurw->bdbcur, String_val(vval), Int_val(vlen), cpmode);
   caml_leave_blocking_section ();
