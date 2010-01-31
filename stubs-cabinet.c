@@ -226,7 +226,106 @@ value otoky_tclist_bsearch(TCLIST *tclist, value vstring, value vlen)
 
 
 
-/* XXX could do away with this struct */
+CAMLprim
+TCMAP *otoky_tcmap_new(value vbnum, value vunit)
+{
+  int32 bnum = int32_option(vbnum);
+  TCMAP *tcmap;
+  if (bnum == -1)
+    tcmap = tcmapnew();
+  else
+    tcmap = tcmapnew2(bnum);
+  return tcmap;
+}
+
+CAMLprim
+value otoky_tcmap_del(TCMAP *tcmap)
+{
+  tcmapdel(tcmap);
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_tcmap_put(TCMAP *tcmap, value vkey, value vkeylen, value vval, value vvallen)
+{
+  tcmapput(tcmap, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_tcmap_putcat(TCMAP *tcmap, value vkey, value vkeylen, value vval, value vvallen)
+{
+  tcmapputcat(tcmap, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_tcmap_putkeep(TCMAP *tcmap, value vkey, value vkeylen, value vval, value vvallen)
+{
+  tcmapputkeep(tcmap, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_tcmap_out(TCMAP *tcmap, value vkey, value vlen)
+{
+  tcmapout(tcmap, String_val(vkey), Int_val(vlen));
+  return Val_unit;
+}
+
+CAMLprim
+const void *otoky_tcmap_get(TCMAP *tcmap, value vkey, value vkeylen, value vvallen)
+{
+  int vallen;
+  const void *val = tcmapget(tcmap, String_val(vkey), Int_val(vkeylen), &vallen);
+  if (!val) caml_raise_not_found();
+  Field(vvallen, 0) = Val_int(vallen);
+  return val;
+}
+
+CAMLprim
+value otoky_tcmap_iterinit(TCMAP *tcmap)
+{
+  tcmapiterinit(tcmap);
+  return Val_unit;
+}
+
+CAMLprim
+const void *otoky_tcmap_iternext(TCMAP *tcmap, value vlen)
+{
+  int len;
+  const void *val = tcmapiternext(tcmap, &len);
+  if (!val) caml_raise_not_found();
+  Field(vlen, 0) = Val_int(len);
+  return val;
+}
+
+CAMLprim
+value otoky_tcmap_rnum(TCMAP *tcmap)
+{
+  return caml_copy_int64(tcmaprnum(tcmap));
+}
+
+CAMLprim
+value otoky_tcmap_msiz(TCMAP *tcmap)
+{
+  return caml_copy_int64(tcmapmsiz(tcmap));
+}
+
+CAMLprim
+TCLIST *otoky_tcmap_keys(TCMAP *tcmap)
+{
+  return tcmapkeys(tcmap);
+}
+
+CAMLprim
+TCLIST *otoky_tcmap_vals(TCMAP *tcmap)
+{
+  return tcmapvals(tcmap);
+}
+
+
+
 typedef struct adb_wrap {
   TCADB *adb;
 } adb_wrap;

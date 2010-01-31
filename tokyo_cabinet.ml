@@ -99,9 +99,9 @@ struct
   external lsearch : t -> string -> int -> int = "otoky_tclist_lsearch"
   external bsearch : t -> string -> int -> int = "otoky_tclist_bsearch"
 
-  let copy_val tclist k =
+  let copy_val t k =
     let len = ref 0 in
-    let s = val_ tclist k len in
+    let s = val_ t k len in
     let r = String.create !len in
     String.unsafe_blit s 0 r 0 !len;
     r
@@ -111,6 +111,33 @@ module Tcmap =
 struct
   type t
 
+  external new_ : ?bnum:int32 -> unit -> t = "otoky_tcmap_new"
+  external del : t -> unit = "otoky_tcmap_del"
+  external put : t -> string -> int -> string -> int -> unit = "otoky_tcmap_put"
+  external putcat : t -> string -> int -> string -> int -> unit = "otoky_tcmap_putcat"
+  external putkeep : t -> string -> int -> string -> int -> unit = "otoky_tcmap_putkeep"
+  external out : t -> string -> int -> unit = "otoky_tcmap_out"
+  external get : t -> string -> int -> int ref -> string = "otoky_tcmap_get"
+  external iterinit : t -> unit = "otoky_tcmap_iterinit"
+  external iternext : t -> int ref -> string = "otoky_tcmap_iternext"
+  external rnum : t -> int64 = "otoky_tcmap_rnum"
+  external msiz : t -> int64 = "otoky_tcmap_msiz"
+  external keys : t -> Tclist.t = "otoky_tcmap_keys"
+  external vals : t -> Tclist.t = "otoky_tcmap_vals"
+
+  let copy_get t k klen =
+    let vlen = ref 0 in
+    let s = get t k klen vlen in
+    let v = String.create !vlen in
+    String.unsafe_blit s 0 v 0 !vlen;
+    v
+
+  let copy_iternext t =
+    let len = ref 0 in
+    let s = iternext t len in
+    let r = String.create !len in
+    String.unsafe_blit s 0 r 0 !len;
+    r
 end
 
 module type Tclist_t =
@@ -186,8 +213,20 @@ struct
 
   let del = true
 
-  let of_tcmap tcmap = failwith "unimplemented"
-  let to_tcmap t = failwith "unimplemented"
+  let of_tcmap tcmap =
+    let rec loop () =
+      try
+	let k = Tcmap.copy_iternext tcmap in
+	let v = Tcmap.copy_get tcmap k (String.length k) in
+	(k, v) :: loop ()
+      with Not_found -> [] in
+    Tcmap.iterinit tcmap;
+    loop ()
+
+  let to_tcmap t =
+    let tcmap = Tcmap.new_ () in
+    List.iter (fun (k, v) -> Tcmap.put tcmap k (String.length k) v (String.length v)) t;
+    tcmap
 end
 
 module Tcmap_array =
@@ -196,8 +235,21 @@ struct
 
   let del = true
 
-  let of_tcmap tcmap = failwith "unimplemented"
-  let to_tcmap t = failwith "unimplemented"
+  let of_tcmap tcmap =
+    let rnum = Int64.to_int (Tcmap.rnum tcmap) in
+    let a = Array.make rnum ("","") in
+    Tcmap.iterinit tcmap;
+    for i = 0 to rnum -1 do
+      let k = Tcmap.copy_iternext tcmap in
+      let v = Tcmap.copy_get tcmap k (String.length k) in
+      a.(i) <- (k, v)
+    done;
+    a
+
+  let to_tcmap t =
+    let tcmap = Tcmap.new_ () in
+    Array.iter (fun (k, v) -> Tcmap.put tcmap k (String.length k) v (String.length v)) t;
+    tcmap
 end
 
 module Tcmap_hashtbl =
@@ -206,8 +258,21 @@ struct
 
   let del = true
 
-  let of_tcmap tcmap = failwith "unimplemented"
-  let to_tcmap t = failwith "unimplemented"
+  let of_tcmap tcmap =
+    let rnum = Int64.to_int (Tcmap.rnum tcmap) in
+    let h = Hashtbl.create rnum in
+    Tcmap.iterinit tcmap;
+    for i = 0 to rnum -1 do
+      let k = Tcmap.copy_iternext tcmap in
+      let v = Tcmap.copy_get tcmap k (String.length k) in
+      Hashtbl.replace h k v
+    done;
+    h
+
+  let to_tcmap t =
+    let tcmap = Tcmap.new_ () in
+    Hashtbl.iter (fun k v -> Tcmap.put tcmap k (String.length k) v (String.length v)) t;
+    tcmap
 end
 
 module Tcmap_tcmap =
@@ -790,38 +855,39 @@ end
 
 module TDB =
 struct
-  type itype = It_lexical | It_decimal | It_token | It_qgram | It_opt | It_void | It_keep
+  type itype = It_lexical | It_decimal | It_token | It_qgram | It_opt | It_void
 
   type t
 
   module type Sig =
   sig
+    type cstr_t
     type tclist_t
     type tcmap_t
 
     val new_ : unit -> t
 
-    val adddouble : t -> string -> float -> float
-    val addint : t -> string -> int -> int
+    val adddouble : t -> cstr_t -> float -> float
+    val addint : t -> cstr_t -> int -> int
     val close : t -> unit
     val copy : t -> string -> unit
     val fsiz : t -> int64
-    val fwmkeys : t -> ?max:int -> string -> tclist_t
+    val fwmkeys : t -> ?max:int -> cstr_t -> tclist_t
     val genuid : t -> int64
-    val get : t -> string -> tcmap_t
+    val get : t -> cstr_t -> tcmap_t
     val iterinit : t -> unit
-    val iternext : t -> string
+    val iternext : t -> cstr_t
     val open_ : t -> ?omode:omode list -> string -> unit
     val optimize : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-    val out : t -> string -> unit
+    val out : t -> cstr_t -> unit
     val path : t -> string
-    val put : t -> string -> tcmap_t -> unit
-    val putcat : t -> string -> tcmap_t -> unit
-    val putkeep : t -> string -> tcmap_t -> unit
+    val put : t -> cstr_t -> tcmap_t -> unit
+    val putcat : t -> cstr_t -> tcmap_t -> unit
+    val putkeep : t -> cstr_t -> tcmap_t -> unit
     val rnum : t -> int64
     val setcache : t -> ?rcnum:int32 -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit
     val setdfunit : t -> int32 -> unit
-    val setindex : t -> string -> itype -> unit
+    val setindex : t -> string -> ?keep:bool -> itype -> unit
     val setxmsiz : t -> int64 -> unit
     val sync : t -> unit
     val tranabort : t -> unit
@@ -829,11 +895,12 @@ struct
     val trancommit : t -> unit
     val tune : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
     val vanish : t -> unit
-    val vsiz : t -> string -> int
+    val vsiz : t -> cstr_t -> int
   end
 
-  module Fun (Tcl : Tclist_t) (Tcm : Tcmap_t) =
+  module Fun (Cs : Cstr_t) (Tcl : Tclist_t) (Tcm : Tcmap_t) =
   struct
+    type cstr_t = Cs.t
     type tclist_t = Tcl.t
     type tcmap_t = Tcm.t
 
@@ -859,7 +926,7 @@ struct
     let rnum t = failwith "unimplemented"
     let setcache t ?rcnum ?lcnum ?ncnum () = failwith "unimplemented"
     let setdfunit t dfunit = failwith "unimplemented"
-    let setindex t name itype = failwith "unimplemented"
+    let setindex t name ?keep itype = failwith "unimplemented"
     let setxmsiz t xmsiz = failwith "unimplemented"
     let sync t = failwith "unimplemented"
     let tranabort t = failwith "unimplemented"
@@ -870,7 +937,7 @@ struct
     let vsiz t pkey = failwith "unimplemented"
   end
 
-  include Fun (Tclist_list) (Tcmap_list)
+  include Fun (Cstr_string) (Tclist_list) (Tcmap_list)
 end
 
 module TDBQRY =
