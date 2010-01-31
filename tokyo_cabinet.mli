@@ -289,27 +289,28 @@ sig
 
   module type Sig =
   sig
+    type cstr_t
     type tclist_t
 
     val new_ : unit -> t
 
-    val adddouble : t -> string -> float -> float
-    val addint : t -> string -> int -> int
+    val adddouble : t -> cstr_t -> float -> float
+    val addint : t -> cstr_t -> int -> int
     val close : t -> unit
     val copy : t -> string -> unit
     val fsiz : t -> int64
-    val fwmkeys : t -> ?max:int -> string -> tclist_t
-    val get : t -> string -> string
+    val fwmkeys : t -> ?max:int -> cstr_t -> tclist_t
+    val get : t -> cstr_t -> cstr_t
     val iterinit : t -> unit
-    val iternext : t -> string
+    val iternext : t -> cstr_t
     val open_ : t -> ?omode:omode list -> string -> unit
     val optimize : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-    val out : t -> string -> unit
+    val out : t -> cstr_t -> unit
     val path : t -> string
-    val put : t -> string -> string -> unit
-    val putasync : t -> string -> string -> unit
-    val putcat : t -> string -> string -> unit
-    val putkeep : t -> string -> string -> unit
+    val put : t -> cstr_t -> cstr_t -> unit
+    val putasync : t -> cstr_t -> cstr_t -> unit
+    val putcat : t -> cstr_t -> cstr_t -> unit
+    val putkeep : t -> cstr_t -> cstr_t -> unit
     val rnum : t -> int64
     val setcache : t -> int32 -> unit
     val setdfunit : t -> int32 -> unit
@@ -320,12 +321,12 @@ sig
     val trancommit : t -> unit
     val tune : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
     val vanish : t -> unit
-    val vsiz : t -> string -> int
+    val vsiz : t -> cstr_t -> int
   end
 
-  include Sig with type tclist_t = string list
+  include Sig with type cstr_t = string and type tclist_t = string list
 
-  module Fun (Tcl : Tclist_t) : Sig with type tclist_t = Tcl.t
+  module Fun (Cs : Cstr_t) (Tcl : Tclist_t) : Sig with type cstr_t = Cs.t and type tclist_t = Tcl.t
 end
 
 module TDB :

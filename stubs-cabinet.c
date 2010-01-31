@@ -970,7 +970,7 @@ value otoky_bdb_setxmsiz(value vbdb, value vxmsiz)
   bdb_wrap *bdbw = bdb_wrap_val(vbdb);
   bool r;
   caml_enter_blocking_section();
-  r = tcbdbsetxmsiz(bdbw->bdb, Int32_val(vxmsiz));
+  r = tcbdbsetxmsiz(bdbw->bdb, Int64_val(vxmsiz));
   caml_leave_blocking_section();
   if (!r) bdb_error(bdbw, "setxmsiz");
   return Val_unit;
@@ -1564,5 +1564,393 @@ value otoky_fdb_vsiz(value vfdb, value vkey)
   r = tcfdbvsiz(fdbw->fdb, Int64_val(vkey));
   caml_leave_blocking_section();
   if (r == -1) fdb_error(fdbw, "vsiz");
+  return Val_int(r);
+}
+
+
+
+typedef struct hdb_wrap {
+  TCHDB *hdb;
+} hdb_wrap;
+
+#define hdb_wrap_val(v) (*((hdb_wrap **)(Data_custom_val(v))))
+
+static void hdb_finalize(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  caml_enter_blocking_section();
+  (void)tchdbclose(hdbw->hdb);
+  caml_leave_blocking_section();
+  tchdbdel(hdbw->hdb);
+  free(hdbw);
+}
+
+static void hdb_error(hdb_wrap *hdbw, const char *fn_name)
+{
+  raise_error_exn(tchdbecode(hdbw->hdb), fn_name);
+}
+
+CAMLprim
+value otoky_hdb_new(value unit)
+{
+  TCHDB *hdb = tchdbnew();
+  hdb_wrap *hdbw;
+  value vhdb = caml_alloc_final(2, hdb_finalize, 1, 100);
+  tchdbsetmutex(hdb); /* XXX does this affect performance for single-threaded code? */
+  hdbw = caml_stat_alloc(sizeof(hdb_wrap));
+  hdbw->hdb = hdb;
+  hdb_wrap_val(vhdb) = hdbw;
+  return vhdb;
+}
+
+CAMLprim
+value otoky_hdb_adddouble(value vhdb, value vkey, value vlen, value vnum)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  double num;
+  caml_enter_blocking_section();
+  num = tchdbadddouble(hdbw->hdb, String_val(vkey), Int_val(vlen), Double_val(vnum));
+  caml_leave_blocking_section();
+  if (isnan(num)) hdb_error(hdbw, "adddouble");
+  return caml_copy_double(num);
+}
+
+CAMLprim
+value otoky_hdb_addint(value vhdb, value vkey, value vlen, value vnum)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  int num;
+  caml_enter_blocking_section();
+  num = tchdbaddint(hdbw->hdb, String_val(vkey), Int_val(vlen), Int_val(vnum));
+  caml_leave_blocking_section();
+  if (num == INT_MIN) hdb_error(hdbw, "addint");
+  return Val_int (num);
+}
+
+CAMLprim
+value otoky_hdb_close(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbclose(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "close");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_copy(value vhdb, value vpath)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbcopy(hdbw->hdb, String_val(vpath));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "copy");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_fsiz(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  uint64_t r;
+  caml_enter_blocking_section();
+  r = tchdbfsiz(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "fsiz");
+  return caml_copy_int64(r);
+}
+
+CAMLprim
+TCLIST *otoky_hdb_fwmkeys(value vhdb, value vmax, value vprefix, value vlen)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  TCLIST *tclist;
+  caml_enter_blocking_section();
+  tclist = tchdbfwmkeys(hdbw->hdb, String_val(vprefix), Int_val(vlen), int_option(vmax));
+  caml_leave_blocking_section();
+  if (!tclist) hdb_error(hdbw, "fwmkeys");
+  return tclist;
+}
+
+CAMLprim
+value otoky_hdb_get(value vhdb, value vkey, value vlen)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  void *val;
+  int len;
+  caml_enter_blocking_section();
+  val = tchdbget(hdbw->hdb, String_val(vkey), Int_val(vlen), &len);
+  caml_leave_blocking_section();
+  if (!val) hdb_error(hdbw, "get");
+  return make_cstr(val, len);
+}
+
+CAMLprim
+value otoky_hdb_iterinit(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbiterinit(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "iterinit");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_iternext(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  void *key;
+  int len;
+  caml_enter_blocking_section();
+  key = tchdbiternext(hdbw->hdb, &len);
+  caml_leave_blocking_section();
+  if (!key) hdb_error(hdbw, "iternext");
+  return make_cstr(key, len);
+}
+
+CAMLprim
+value otoky_hdb_open(value vhdb, value vmode, value vname)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbopen(hdbw->hdb, String_val(vname), omode_int_of_list(vmode));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "open");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_optimize(value vhdb, value vbnum, value vapow, value vfpow, value vopts, value vunit)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdboptimize(hdbw->hdb,
+                    int64_option(vbnum), int_option(vapow), int_option(vfpow), opt_int_of_list(vopts));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "optimize");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_optimize_bc(value *argv, int argn)
+{
+  return otoky_hdb_optimize(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
+}
+
+CAMLprim
+value otoky_hdb_out(value vhdb, value vkey, value vlen)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbout(hdbw->hdb, String_val(vkey), Int_val(vlen));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "out");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_path(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  const char* path;
+  caml_enter_blocking_section();
+  path = tchdbpath(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!path) hdb_error(hdbw, "path");
+  return caml_copy_string(path);
+}
+
+CAMLprim
+value otoky_hdb_put(value vhdb, value vkey, value vkeylen, value vval, value vvallen)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbput(hdbw->hdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "put");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_putasync(value vhdb, value vkey, value vkeylen, value vval, value vvallen)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbputasync(hdbw->hdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "putasync");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_putcat(value vhdb, value vkey, value vkeylen, value vval, value vvallen)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbputcat(hdbw->hdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "putcat");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_putkeep(value vhdb, value vkey, value vkeylen, value vval, value vvallen)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbputkeep(hdbw->hdb, String_val(vkey), Int_val(vkeylen), String_val(vval), Int_val(vvallen));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "putkeep");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_rnum(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  uint64_t r;
+  caml_enter_blocking_section();
+  r = tchdbrnum(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "rnum");
+  return caml_copy_int64(r);
+}
+
+CAMLprim
+value otoky_hdb_setcache(value vhdb, value vrcnum)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbsetcache(hdbw->hdb, Int32_val(vrcnum));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "setcache");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_setdfunit(value vhdb, value vdfunit)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbsetdfunit(hdbw->hdb, Int32_val(vdfunit));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "setdfunit");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_setxmsiz(value vhdb, value vxmsiz)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbsetxmsiz(hdbw->hdb, Int64_val(vxmsiz));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "setxmsiz");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_sync(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbsync(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "sync");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_tranabort(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbtranabort(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "tranabort");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_tranbegin(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbtranbegin(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "tranbegin");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_trancommit(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbtrancommit(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "trancommit");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_tune(value vhdb, value vbnum, value vapow, value vfpow, value vopts, value vunit)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbtune(hdbw->hdb,
+                int64_option(vbnum), int_option(vapow), int_option(vfpow), opt_int_of_list(vopts));
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "tune");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_tune_bc(value *argv, int argn)
+{
+  return otoky_hdb_tune(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
+}
+
+CAMLprim
+value otoky_hdb_vanish(value vhdb)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  bool r;
+  caml_enter_blocking_section();
+  r = tchdbvanish(hdbw->hdb);
+  caml_leave_blocking_section();
+  if (!r) hdb_error(hdbw, "vanish");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_hdb_vsiz(value vhdb, value vkey, value vlen)
+{
+  hdb_wrap *hdbw = hdb_wrap_val(vhdb);
+  int r;
+  caml_enter_blocking_section();
+  r = tchdbvsiz(hdbw->hdb, String_val(vkey), Int_val(vlen));
+  caml_leave_blocking_section();
+  if (r == -1) hdb_error(hdbw, "vsiz");
   return Val_int(r);
 }

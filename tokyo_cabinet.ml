@@ -669,27 +669,28 @@ struct
 
   module type Sig =
   sig
+    type cstr_t
     type tclist_t
 
     val new_ : unit -> t
 
-    val adddouble : t -> string -> float -> float
-    val addint : t -> string -> int -> int
+    val adddouble : t -> cstr_t -> float -> float
+    val addint : t -> cstr_t -> int -> int
     val close : t -> unit
     val copy : t -> string -> unit
     val fsiz : t -> int64
-    val fwmkeys : t -> ?max:int -> string -> tclist_t
-    val get : t -> string -> string
+    val fwmkeys : t -> ?max:int -> cstr_t -> tclist_t
+    val get : t -> cstr_t -> cstr_t
     val iterinit : t -> unit
-    val iternext : t -> string
+    val iternext : t -> cstr_t
     val open_ : t -> ?omode:omode list -> string -> unit
     val optimize : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
-    val out : t -> string -> unit
+    val out : t -> cstr_t -> unit
     val path : t -> string
-    val put : t -> string -> string -> unit
-    val putasync : t -> string -> string -> unit
-    val putcat : t -> string -> string -> unit
-    val putkeep : t -> string -> string -> unit
+    val put : t -> cstr_t -> cstr_t -> unit
+    val putasync : t -> cstr_t -> cstr_t -> unit
+    val putcat : t -> cstr_t -> cstr_t -> unit
+    val putkeep : t -> cstr_t -> cstr_t -> unit
     val rnum : t -> int64
     val setcache : t -> int32 -> unit
     val setdfunit : t -> int32 -> unit
@@ -700,46 +701,91 @@ struct
     val trancommit : t -> unit
     val tune : t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
     val vanish : t -> unit
-    val vsiz : t -> string -> int
+    val vsiz : t -> cstr_t -> int
   end
 
-  module Fun (Tcl : Tclist_t) =
+  module Fun (Cs : Cstr_t) (Tcl : Tclist_t) =
   struct
+    type cstr_t = Cs.t
     type tclist_t = Tcl.t
 
-    let new_ () = failwith "unimplemented"
+    external new_ : unit -> t = "otoky_hdb_new"
 
-    let adddouble t key num = failwith "unimplemented"
-    let addint t key num = failwith "unimplemented"
-    let close t = failwith "unimplemented"
-    let copy t path = failwith "unimplemented"
-    let fsiz t = failwith "unimplemented"
-    let fwmkeys t ?max prefix = failwith "unimplemented"
-    let get t key = failwith "unimplemented"
-    let iterinit t = failwith "unimplemented"
-    let iternext t = failwith "unimplemented"
-    let open_ t ?omode path = failwith "unimplemented"
-    let optimize t ?bnum ?apow ?fpow ?opts () = failwith "unimplemented"
-    let out t key = failwith "unimplemented"
-    let path t = failwith "unimplemented"
-    let put t key value = failwith "unimplemented"
-    let putasync t key value = failwith "unimplemented"
-    let putcat t key value = failwith "unimplemented"
-    let putkeep t key value = failwith "unimplemented"
-    let rnum t = failwith "unimplemented"
-    let setcache t rcnum = failwith "unimplemented"
-    let setdfunit t dfunit = failwith "unimplemented"
-    let setxmsiz t xmsiz = failwith "unimplemented"
-    let sync t = failwith "unimplemented"
-    let tranabort t = failwith "unimplemented"
-    let tranbegin t = failwith "unimplemented"
-    let trancommit t = failwith "unimplemented"
-    let tune t ?bnum ?apow ?fpow ?opts () = failwith "unimplemented"
-    let vanish t = failwith "unimplemented"
-    let vsiz t key = failwith "unimplemented"
+    external _adddouble : t -> string -> int -> float -> float = "otoky_hdb_adddouble"
+    let adddouble t key num = _adddouble t (Cs.string key) (Cs.length key) num
+
+    external _addint : t -> string -> int -> int -> int = "otoky_hdb_addint"
+    let addint t key num = _addint t (Cs.string key) (Cs.length key) num
+
+    external close : t -> unit = "otoky_hdb_close"
+    external copy : t -> string -> unit = "otoky_hdb_copy"
+    external fsiz : t -> int64 = "otoky_hdb_fsiz"
+
+    external _fwmkeys : t -> ?max:int -> string -> int -> Tclist.t = "otoky_hdb_fwmkeys"
+    let fwmkeys t ?max prefix =
+      let tclist = _fwmkeys t ?max (Cs.string prefix) (Cs.length prefix) in
+      let r = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      r
+
+    external _get : t -> string -> int -> Cstr.t = "otoky_hdb_get"
+    let get t key =
+      let cstr = _get t (Cs.string key) (Cs.length key) in
+      let r = Cs.of_cstr cstr in
+      if Cs.del then Cstr.del cstr;
+      r
+
+    external iterinit : t -> unit = "otoky_hdb_iterinit"
+
+    external _iternext : t -> Cstr.t = "otoky_hdb_iternext"
+    let iternext t =
+      let cstr = _iternext t in
+      let r = Cs.of_cstr cstr in
+      if Cs.del then Cstr.del cstr;
+      r
+
+    external open_ : t -> ?omode:omode list -> string -> unit = "otoky_hdb_open"
+    external optimize :
+      t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
+          "otoky_hdb_optimize_bc" "otoky_hdb_optimize"
+
+    external _out : t -> string -> int -> unit = "otoky_hdb_out"
+    let out t key = _out t (Cs.string key) (Cs.length key)
+
+    external path : t -> string = "otoky_hdb_path"
+
+    external _put : t -> string -> int -> string -> int -> unit = "otoky_hdb_put"
+    let put t key value = _put t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
+
+    external _putasync : t -> string -> int -> string -> int -> unit = "otoky_hdb_putasync"
+    let putasync t key value = _putasync t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
+
+    external _putcat : t -> string -> int -> string -> int -> unit = "otoky_hdb_putcat"
+    let putcat t key value = _putcat t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
+
+    external _putkeep : t -> string -> int -> string -> int -> unit = "otoky_hdb_putkeep"
+    let putkeep t key value = _putkeep t (Cs.string key) (Cs.length key) (Cs.string value) (Cs.length value)
+
+    external rnum : t -> int64 = "otoky_hdb_rnum"
+
+    external setcache : t -> int32 -> unit = "otoky_hdb_setcache"
+    external setdfunit : t -> int32 -> unit = "otoky_hdb_setdfunit"
+    external setxmsiz : t -> int64 -> unit = "otoky_hdb_setxmsiz"
+
+    external sync : t -> unit = "otoky_hdb_sync"
+    external tranabort : t -> unit = "otoky_hdb_tranabort"
+    external tranbegin : t -> unit = "otoky_hdb_tranbegin"
+    external trancommit : t -> unit = "otoky_hdb_trancommit"
+    external tune :
+      t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
+          "otoky_hdb_tune_bc" "otoky_hdb_tune"
+    external vanish : t -> unit = "otoky_hdb_vanish"
+
+    external _vsiz : t -> string -> int -> int = "otoky_hdb_vsiz"
+    let vsiz t key = _vsiz t (Cs.string key) (Cs.length key)
   end
 
-  include Fun (Tclist_list)
+  include Fun (Cstr_string) (Tclist_list)
 end
 
 module TDB =
