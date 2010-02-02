@@ -904,37 +904,112 @@ struct
     type tclist_t = Tcl.t
     type tcmap_t = Tcm.t
 
-    let new_ () = failwith "unimplemented"
 
-    let adddouble t pkey num = failwith "unimplemented"
-    let addint t pkey num = failwith "unimplemented"
-    let close t = failwith "unimplemented"
-    let copy t path = failwith "unimplemented"
-    let fsiz t = failwith "unimplemented"
-    let fwmkeys t ?max prefix = failwith "unimplemented"
-    let genuid t = failwith "unimplemented"
-    let get t pkey = failwith "unimplemented"
-    let iterinit t = failwith "unimplemented"
-    let iternext t = failwith "unimplemented"
-    let open_ t ?omode path = failwith "unimplemented"
-    let optimize t ?bnum ?apow ?fpow ?opts () = failwith "unimplemented"
-    let out t pkey = failwith "unimplemented"
-    let path t = failwith "unimplemented"
-    let put t pkey cols = failwith "unimplemented"
-    let putcat t pkey cols = failwith "unimplemented"
-    let putkeep t pkey cols = failwith "unimplemented"
-    let rnum t = failwith "unimplemented"
-    let setcache t ?rcnum ?lcnum ?ncnum () = failwith "unimplemented"
-    let setdfunit t dfunit = failwith "unimplemented"
-    let setindex t name ?keep itype = failwith "unimplemented"
-    let setxmsiz t xmsiz = failwith "unimplemented"
-    let sync t = failwith "unimplemented"
-    let tranabort t = failwith "unimplemented"
-    let tranbegin t = failwith "unimplemented"
-    let trancommit t = failwith "unimplemented"
-    let tune t ?bnum ?apow ?fpow ?opts () = failwith "unimplemented"
-    let vanish t = failwith "unimplemented"
-    let vsiz t pkey = failwith "unimplemented"
+    external new_ : unit -> t = "otoky_tdb_new"
+
+    external _adddouble : t -> string -> int -> float -> float = "otoky_tdb_adddouble"
+    let adddouble t key num = _adddouble t (Cs.string key) (Cs.length key) num
+
+    external _addint : t -> string -> int -> int -> int = "otoky_tdb_addint"
+    let addint t key num = _addint t (Cs.string key) (Cs.length key) num
+
+    external close : t -> unit = "otoky_tdb_close"
+    external copy : t -> string -> unit = "otoky_tdb_copy"
+    external fsiz : t -> int64 = "otoky_tdb_fsiz"
+
+    external _fwmkeys : t -> ?max:int -> string -> int -> Tclist.t = "otoky_tdb_fwmkeys"
+    let fwmkeys t ?max prefix =
+      let tclist = _fwmkeys t ?max (Cs.string prefix) (Cs.length prefix) in
+      let r = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      r
+
+    external genuid : t -> int64 = "otoky_tdb_genuid"
+
+    external _get : t -> string -> int -> Tcmap.t = "otoky_tdb_get"
+    let get t key =
+      let tcmap = _get t (Cs.string key) (Cs.length key) in
+      let r = Tcm.of_tcmap tcmap in
+      if Tcm.del then Tcmap.del tcmap;
+      r
+
+    external iterinit : t -> unit = "otoky_tdb_iterinit"
+
+    external _iternext : t -> Cstr.t = "otoky_tdb_iternext"
+    let iternext t =
+      let cstr = _iternext t in
+      let r = Cs.of_cstr cstr in
+      if Cs.del then Cstr.del cstr;
+      r
+
+    external open_ : t -> ?omode:omode list -> string -> unit = "otoky_tdb_open"
+
+    external optimize :
+      t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
+          "otoky_tdb_optimize_bc" "otoky_tdb_optimize"
+
+    external _out : t -> string -> int -> unit = "otoky_tdb_out"
+    let out t key = _out t (Cs.string key) (Cs.length key)
+
+    external path : t -> string = "otoky_tdb_path"
+
+    external _put : t -> string -> int -> Tcmap.t -> unit = "otoky_tdb_put"
+    let put t pkey cols =
+      if Tcm.del
+      then
+        let cols_tcmap = Tcm.to_tcmap cols in
+        begin
+          try _put t (Cs.string pkey) (Cs.length pkey) cols_tcmap
+          with e -> Tcmap.del cols_tcmap; raise e
+        end;
+        Tcmap.del cols_tcmap
+      else
+        _put t (Cs.string pkey) (Cs.length pkey) (Tcm.to_tcmap cols)
+
+    external _putcat : t -> string -> int -> Tcmap.t -> unit = "otoky_tdb_putcat"
+    let putcat t pkey cols =
+      if Tcm.del
+      then
+        let cols_tcmap = Tcm.to_tcmap cols in
+        begin
+          try _putcat t (Cs.string pkey) (Cs.length pkey) cols_tcmap
+          with e -> Tcmap.del cols_tcmap; raise e
+        end;
+        Tcmap.del cols_tcmap
+      else
+        _putcat t (Cs.string pkey) (Cs.length pkey) (Tcm.to_tcmap cols)
+
+    external _putkeep : t -> string -> int -> Tcmap.t -> unit = "otoky_tdb_putkeep"
+    let putkeep t pkey cols =
+      if Tcm.del
+      then
+        let cols_tcmap = Tcm.to_tcmap cols in
+        begin
+          try _putkeep t (Cs.string pkey) (Cs.length pkey) cols_tcmap
+          with e -> Tcmap.del cols_tcmap; raise e
+        end;
+        Tcmap.del cols_tcmap
+      else
+        _putkeep t (Cs.string pkey) (Cs.length pkey) (Tcm.to_tcmap cols)
+
+    external rnum : t -> int64 = "otoky_tdb_rnum"
+
+    external setcache : t -> ?rcnum:int32 -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit = "otoky_tdb_setcache"
+    external setdfunit : t -> int32 -> unit = "otoky_tdb_setdfunit"
+    external setindex : t -> string -> ?keep:bool -> itype -> unit = "otoky_tdb_setindex"
+    external setxmsiz : t -> int64 -> unit = "otoky_tdb_setxmsiz"
+
+    external sync : t -> unit = "otoky_tdb_sync"
+    external tranabort : t -> unit = "otoky_tdb_tranabort"
+    external tranbegin : t -> unit = "otoky_tdb_tranbegin"
+    external trancommit : t -> unit = "otoky_tdb_trancommit"
+    external tune :
+      t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit =
+          "otoky_tdb_tune_bc" "otoky_tdb_tune"
+    external vanish : t -> unit = "otoky_tdb_vanish"
+
+    external _vsiz : t -> string -> int -> int = "otoky_tdb_vsiz"
+    let vsiz t pkey = _vsiz t (Cs.string pkey) (Cs.length pkey)
   end
 
   include Fun (Cstr_string) (Tclist_list) (Tcmap_list)
