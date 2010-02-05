@@ -2649,6 +2649,7 @@ static int tdbqry_proc(const void *pkbuf, int pksiz, TCMAP *cols, value **func_e
       }
     }
   }
+  caml_enter_blocking_section();
   return qposts;
 }
 
@@ -2660,6 +2661,7 @@ value otoky_tdbqry_proc(value vtdbqry, value vfunc)
   value *func_exn[] = { &vfunc, &vexn };
   tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
   bool r;
+  vexn = Val_unit;
   caml_enter_blocking_section();
   r = tctdbqryproc(tdbqryw->tdbqry, (TDBQRYPROC)tdbqry_proc, func_exn);
   caml_leave_blocking_section();
