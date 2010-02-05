@@ -1064,7 +1064,7 @@ struct
     val search : t -> tclist_t
     val searchout : t -> unit
     val setlimit : t -> ?max:int -> ?skip:int -> unit -> unit
-    val setorder : t -> string -> qord -> unit
+    val setorder : t -> ?qord:qord -> string -> unit
   end
 
   module Fun (Tcl : Tclist_t) (Tcm : Tcmap_t) =
@@ -1121,7 +1121,7 @@ struct
 
     external searchout : t -> unit = "otoky_tdbqry_searchout"
     external setlimit : t -> ?max:int -> ?skip:int -> unit -> unit = "otoky_tdbqry_setlimit"
-    external setorder : t -> string -> qord -> unit = "otoky_tdbqry_setorder"
+    external setorder : t -> ?qord:qord -> string -> unit = "otoky_tdbqry_setorder"
   end
 
   include Fun (Tclist_list) (Tcmap_list)

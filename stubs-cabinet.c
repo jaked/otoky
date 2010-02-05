@@ -2703,15 +2703,17 @@ value otoky_tdbqry_setlimit(value vtdbqry, value vmax, value vskip, value vunit)
 enum qord { Qo_strasc, Qo_strdesc, Qo_numasc, Qo_numdesc };
 
 CAMLprim
-value otoky_tdbqry_setorder(value vtdbqry, value vname, value vqord)
+value otoky_tdbqry_setorder(value vtdbqry, value vqord, value vname)
 {
   tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
   int qord = TDBQOSTRASC;
-  switch (Int_val(vqord)) {
-  case Qo_strasc:  qord = TDBQOSTRASC;  break;
-  case Qo_strdesc: qord = TDBQOSTRDESC; break;
-  case Qo_numasc:  qord = TDBQONUMASC;  break;
-  case Qo_numdesc: qord = TDBQONUMDESC; break;
+  if (vqord != Val_int(0)) {
+    switch (Int_val(Field(vqord, 0))) {
+    case Qo_strasc:  qord = TDBQOSTRASC;  break;
+    case Qo_strdesc: qord = TDBQOSTRDESC; break;
+    case Qo_numasc:  qord = TDBQONUMASC;  break;
+    case Qo_numdesc: qord = TDBQONUMDESC; break;
+    }
   }
   tctdbqrysetorder(tdbqryw->tdbqry, String_val(vname), qord);
   return Val_unit;

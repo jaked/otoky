@@ -426,7 +426,7 @@ sig
     val search : t -> tclist_t
     val searchout : t -> unit
     val setlimit : t -> ?max:int -> ?skip:int -> unit -> unit
-    val setorder : t -> string -> qord -> unit
+    val setorder : t -> ?qord:qord -> string -> unit
   end
 
   include Sig with type tclist_t = string list and type tcmap_t = (string * string) list
