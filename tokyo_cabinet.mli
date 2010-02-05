@@ -77,6 +77,7 @@ sig
   type t
 
   external new_ : ?bnum:int32 -> unit -> t = "otoky_tcmap_new"
+  external clear : t -> unit = "otoky_tcmap_clear"
   external del : t -> unit = "otoky_tcmap_del"
   external put : t -> string -> int -> string -> int -> unit = "otoky_tcmap_put"
   external putcat : t -> string -> int -> string -> int -> unit = "otoky_tcmap_putcat"
@@ -112,6 +113,7 @@ sig
 
   val of_tcmap : Tcmap.t -> t
   val to_tcmap : t -> Tcmap.t
+  val replace_tcmap : t -> Tcmap.t -> unit
 end
 
 module Tclist_list : Tclist_t with type t = string list
@@ -415,12 +417,12 @@ sig
     type tcmap_t
 
     val new_ : TDB.t -> t
+    val metasearch : ?setop:msetop -> t list -> tclist_t
 
     val addcond : t -> string -> ?negate:bool -> ?noidx:bool -> qcond -> string -> unit
     val hint : t -> string
     val kwic : t -> ?name:string -> ?width:int -> ?opts:kopt list -> tcmap_t -> tclist_t
-    val metasearch : t -> ?setop:msetop -> t list -> tclist_t
-    val proc : t -> (string -> tcmap_t -> qpost list) -> unit
+    val proc : t -> (string -> tcmap_t ref -> qpost list) -> unit
     val search : t -> tclist_t
     val searchout : t -> unit
     val setlimit : t -> ?max:int -> ?skip:int -> unit -> unit

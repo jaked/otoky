@@ -138,7 +138,6 @@ static int omode_int_of_list(value v)
       case Onolck:  mode |= HDBONOLCK;  break;
       case Olcknb:  mode |= HDBOLCKNB;  break;
       case Otsync:  mode |= HDBOTSYNC;  break;
-      default: break;
       }
     }
     return mode;
@@ -162,7 +161,6 @@ static int opt_int_of_list(value v)
       case Tdeflate: opt |= HDBTDEFLATE; break;
       case Tbzip:    opt |= HDBTBZIP;    break;
       case Tcbs:     opt |= HDBTTCBS;     break;
-      default: break;
       }
     }
     return opt;
@@ -236,6 +234,13 @@ TCMAP *otoky_tcmap_new(value vbnum, value vunit)
   else
     tcmap = tcmapnew2(bnum);
   return tcmap;
+}
+
+CAMLprim
+value otoky_tcmap_clear(TCMAP *tcmap)
+{
+  tcmapclear(tcmap);
+  return Val_unit;
 }
 
 CAMLprim
@@ -2363,8 +2368,7 @@ value otoky_tdb_setindex(value vtdb, value vname, value vkeep, value vitype)
   case It_opt:     itype = TDBITOPT;     break;
   case It_void:    itype = TDBITVOID;    break;
   }
-  if (vkeep != Val_int(0) && Field(vkeep, 0) != Val_int(0))
-    itype |= TDBITKEEP;
+  if (bool_option(vkeep)) itype |= TDBITKEEP;
   caml_enter_blocking_section();
   r = tctdbsetindex(tdbw->tdb, String_val(vname), itype);
   caml_leave_blocking_section();
@@ -2473,4 +2477,242 @@ value otoky_tdb_vsiz(value vtdb, value vkey, value vlen)
   caml_leave_blocking_section();
   if (r == -1) tdb_error(tdbw, "vsiz");
   return Val_int(r);
+}
+
+
+
+typedef struct tdbqry_wrap {
+  TDBQRY *tdbqry;
+  tdb_wrap *tdbw;
+} tdbqry_wrap;
+
+#define tdbqry_wrap_val(v) (*((tdbqry_wrap **)(Data_custom_val(v))))
+
+static void tdbqry_finalize(value vtdbqry)
+{
+  tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry); 
+  tdb_decr_ref_count(tdbqryw->tdbw);
+  tctdbqrydel(tdbqryw->tdbqry);
+  free(tdbqryw);
+}
+
+static void tdbqry_error(tdbqry_wrap *tdbqryw, const char *fn_name)
+{
+  /* XXX indicate errror is from TDBQRY module */
+  tdb_error(tdbqryw->tdbw, fn_name);
+}
+
+CAMLprim
+value otoky_tdbqry_new(value vtdb)
+{
+  tdb_wrap *tdbw = tdb_wrap_val(vtdb);
+  value vtdbqry;
+  tdbqry_wrap *tdbqryw;
+  vtdbqry = caml_alloc_final(2, tdbqry_finalize, 1, 100);
+  tdbqryw = caml_stat_alloc(sizeof(tdbqry_wrap));
+  tdbqryw->tdbqry = tctdbqrynew(tdbw->tdb);
+  tdbqryw->tdbw = tdbw;
+  tdbw->ref_count++;
+  tdbqry_wrap_val(vtdbqry) = tdbqryw;
+  return vtdbqry;
+}
+
+enum qcond {
+  Qc_streq, Qc_strinc, Qc_strbw, Qc_strew, Qc_strand, Qc_stror, Qc_stroreq, Qc_strrx,
+  Qc_numeq, Qc_numgt, Qc_numge, Qc_numlt, Qc_numle, Qc_numbt, Qc_numoreq,
+  Qc_ftsph, Qc_ftsand, Qc_ftsor, Qc_ftsex
+};
+
+CAMLprim
+value otoky_tdbqry_addcond(value vtdbqry, value vname, value vnegate, value vnoidx, value vop, value vexpr)
+{
+  tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
+  int op = 0;
+  switch (Int_val(op)) {
+  case Qc_streq:   op = TDBQCSTREQ;   break;
+  case Qc_strinc:  op = TDBQCSTRINC;  break;
+  case Qc_strbw:   op = TDBQCSTRBW;   break;
+  case Qc_strew:   op = TDBQCSTREW;   break;
+  case Qc_strand:  op = TDBQCSTRAND;  break;
+  case Qc_stror:   op = TDBQCSTROR;   break;
+  case Qc_stroreq: op = TDBQCSTROREQ; break;
+  case Qc_strrx:   op = TDBQCSTRRX;   break;
+  case Qc_numeq:   op = TDBQCNUMEQ;   break;
+  case Qc_numgt:   op = TDBQCNUMGT;   break;
+  case Qc_numge:   op = TDBQCNUMGE;   break;
+  case Qc_numlt:   op = TDBQCNUMLT;   break;
+  case Qc_numle:   op = TDBQCNUMLE;   break;
+  case Qc_numbt:   op = TDBQCNUMBT;   break;
+  case Qc_numoreq: op = TDBQCNUMOREQ; break;
+  case Qc_ftsph:   op = TDBQCFTSPH;   break;
+  case Qc_ftsand:  op = TDBQCFTSAND;  break;
+  case Qc_ftsor:   op = TDBQCFTSOR;   break;
+  case Qc_ftsex:   op = TDBQCFTSEX;   break;
+  }
+  if (bool_option(vnegate)) op |= TDBQCNEGATE;
+  if (bool_option(vnoidx)) op |= TDBQCNOIDX;
+  caml_enter_blocking_section();
+  tctdbqryaddcond(tdbqryw->tdbqry, String_val(vname), op, String_val(vexpr));
+  caml_leave_blocking_section();
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_tdbqry_addcond_bc(value *argv, int argn)
+{
+  return otoky_tdbqry_addcond(argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
+}
+
+CAMLprim
+value otoky_tdbqry_hint(value vtdbqry)
+{
+  tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
+  return caml_copy_string(tctdbqryhint(tdbqryw->tdbqry));
+}
+
+enum kopt { Kw_mutab, Kw_muctrl, Kw_mubrct, Kw_noover, Kw_pulead };
+
+CAMLprim
+TCLIST *otoky_tdbqry_kwic(value vtdbqry, value vname, value vwidth, value vopts, TCMAP *tcmap)
+{
+  tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
+  TCLIST *tclist;
+  int width = int_option(vwidth);
+  int opts = 0;
+  for (; vopts != Val_int(0); vopts = Field(vopts, 1)) {
+    switch (Int_val(Field(vopts, 0))) {
+    case Kw_mutab:  opts |= TCKWMUTAB;  break;
+    case Kw_muctrl: opts |= TCKWMUCTRL; break;
+    case Kw_mubrct: opts |= TCKWMUBRCT; break;
+    case Kw_noover: opts |= TCKWNOOVER; break;
+    case Kw_pulead: opts |= TCKWPULEAD; break;
+    }
+  }
+  if (width < 0) {
+    width = 1 << 30;
+    opts |= TCKWNOOVER | TCKWPULEAD;
+  }
+  caml_enter_blocking_section();
+  tclist = tctdbqrykwic(tdbqryw->tdbqry, tcmap, string_option(vname), width, opts);
+  caml_leave_blocking_section();
+  if (!tclist) tdbqry_error(tdbqryw, "kwic");
+  return tclist;
+}
+
+enum msetop { Ms_union, Ms_isect, Ms_diff };
+
+CAMLprim
+TCLIST *otoky_tdbqry_metasearch(value vsetop, value vqrys)
+{
+  TDBQRY **qrys;
+  value vqrysp;
+  int num;
+  TCLIST *tclist;
+  int setop = TDBMSUNION;
+  switch (Int_val(vsetop)) {
+  case Ms_union: setop = TDBMSUNION; break;
+  case Ms_isect: setop = TDBMSISECT; break;
+  case Ms_diff:  setop = TDBMSDIFF;  break;
+  }
+  for (num = 0, vqrysp = vqrys; vqrysp != Val_int(0); vqrysp = Field(vqrysp, 1))
+    num++;
+  qrys = tcmalloc(sizeof(TDBQRY *) * num);
+  for (num = 0; vqrysp != Val_int(0); vqrysp = Field(vqrysp, 1))
+    qrys[num++] = tdbqry_wrap_val(Field(vqrysp, 0))->tdbqry;
+  caml_enter_blocking_section();
+  tclist = tctdbmetasearch(qrys, num, setop);
+  caml_leave_blocking_section();
+  tcfree(qrys);
+  /* huh. this is kind of bogus anyway; I think metasearch returns empty tclist on error */
+  if (!tclist && num > 0) tdbqry_error(tdbqry_wrap_val(Field(vqrys, 0)), "metasearch");
+  return tclist;
+}
+
+enum qpost { Qp_put, Qp_out, Qp_stop };
+
+static int tdbqry_proc(const void *pkbuf, int pksiz, TCMAP *cols, value **func_exn)
+{
+  value vqposts;
+  int qposts = 0;
+  caml_leave_blocking_section();
+  vqposts = caml_callback2_exn(*func_exn[0], copy_string_length(pkbuf, pksiz), (value)cols);
+  if (Is_exception_result(vqposts)) {
+    *func_exn[1] = Extract_exception(vqposts);
+    qposts = TDBQPSTOP;
+  }
+  else {
+    for (; vqposts != Val_int(0); vqposts = Field(vqposts, 1)) {
+      switch (Int_val(Field(vqposts, 0))) {
+      case Qp_put:  qposts |= TDBQPPUT;  break;
+      case Qp_out:  qposts |= TDBQPOUT;  break;
+      case Qp_stop: qposts |= TDBQPSTOP; break;
+      }
+    }
+  }
+  return qposts;
+}
+
+CAMLprim
+value otoky_tdbqry_proc(value vtdbqry, value vfunc)
+{
+  CAMLparam1(vfunc);
+  CAMLlocal1(vexn);
+  value *func_exn[] = { &vfunc, &vexn };
+  tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
+  bool r;
+  caml_enter_blocking_section();
+  r = tctdbqryproc(tdbqryw->tdbqry, (TDBQRYPROC)tdbqry_proc, func_exn);
+  caml_leave_blocking_section();
+  if (vexn != Val_unit) caml_raise (vexn);
+  if (!r) tdbqry_error(tdbqryw, "proc");
+  CAMLreturn (Val_unit);
+}
+
+CAMLprim
+TCLIST *otoky_tdbqry_search(value vtdbqry)
+{
+  tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
+  TCLIST *tclist;
+  caml_enter_blocking_section();
+  tclist = tctdbqrysearch(tdbqryw->tdbqry);
+  caml_leave_blocking_section();
+  if (!tclist) tdbqry_error(tdbqryw, "search");
+  return tclist;
+}
+
+CAMLprim
+value otoky_tdbqry_searchout(value vtdbqry)
+{
+  tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
+  bool r;
+  caml_enter_blocking_section();
+  r = tctdbqrysearchout(tdbqryw->tdbqry);
+  caml_leave_blocking_section();
+  if (!r) tdbqry_error(tdbqryw, "searchout");
+  return Val_unit;
+}
+
+CAMLprim
+value otoky_tdbqry_setlimit(value vtdbqry, value vmax, value vskip, value vunit)
+{
+  tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
+  tctdbqrysetlimit(tdbqryw->tdbqry, int_option(vmax), int_option(vskip));
+  return Val_unit;
+}
+
+enum qord { Qo_strasc, Qo_strdesc, Qo_numasc, Qo_numdesc };
+
+CAMLprim
+value otoky_tdbqry_setorder(value vtdbqry, value vname, value vqord)
+{
+  tdbqry_wrap *tdbqryw = tdbqry_wrap_val(vtdbqry);
+  int qord = TDBQOSTRASC;
+  switch (Int_val(vqord)) {
+  case Qo_strasc:  qord = TDBQOSTRASC;  break;
+  case Qo_strdesc: qord = TDBQOSTRDESC; break;
+  case Qo_numasc:  qord = TDBQONUMASC;  break;
+  case Qo_numdesc: qord = TDBQONUMDESC; break;
+  }
+  tctdbqrysetorder(tdbqryw->tdbqry, String_val(vname), qord);
+  return Val_unit;
 }

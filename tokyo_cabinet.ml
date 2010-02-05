@@ -112,6 +112,7 @@ struct
   type t
 
   external new_ : ?bnum:int32 -> unit -> t = "otoky_tcmap_new"
+  external clear : t -> unit = "otoky_tcmap_clear"
   external del : t -> unit = "otoky_tcmap_del"
   external put : t -> string -> int -> string -> int -> unit = "otoky_tcmap_put"
   external putcat : t -> string -> int -> string -> int -> unit = "otoky_tcmap_putcat"
@@ -158,6 +159,7 @@ sig
 
   val of_tcmap : Tcmap.t -> t
   val to_tcmap : t -> Tcmap.t
+  val replace_tcmap : t -> Tcmap.t -> unit
 end
 
 module Tclist_list =
@@ -216,9 +218,9 @@ struct
   let of_tcmap tcmap =
     let rec loop () =
       try
-	let k = Tcmap.copy_iternext tcmap in
-	let v = Tcmap.copy_get tcmap k (String.length k) in
-	(k, v) :: loop ()
+        let k = Tcmap.copy_iternext tcmap in
+        let v = Tcmap.copy_get tcmap k (String.length k) in
+        (k, v) :: loop ()
       with Not_found -> [] in
     Tcmap.iterinit tcmap;
     loop ()
@@ -227,6 +229,10 @@ struct
     let tcmap = Tcmap.new_ () in
     List.iter (fun (k, v) -> Tcmap.put tcmap k (String.length k) v (String.length v)) t;
     tcmap
+
+  let replace_tcmap t tcmap =
+    Tcmap.clear tcmap;
+    List.iter (fun (k, v) -> Tcmap.put tcmap k (String.length k) v (String.length v)) t
 end
 
 module Tcmap_array =
@@ -250,6 +256,10 @@ struct
     let tcmap = Tcmap.new_ () in
     Array.iter (fun (k, v) -> Tcmap.put tcmap k (String.length k) v (String.length v)) t;
     tcmap
+
+  let replace_tcmap t tcmap =
+    Tcmap.clear tcmap;
+    Array.iter (fun (k, v) -> Tcmap.put tcmap k (String.length k) v (String.length v)) t
 end
 
 module Tcmap_hashtbl =
@@ -273,6 +283,10 @@ struct
     let tcmap = Tcmap.new_ () in
     Hashtbl.iter (fun k v -> Tcmap.put tcmap k (String.length k) v (String.length v)) t;
     tcmap
+
+  let replace_tcmap t tcmap =
+    Tcmap.clear tcmap;
+    Hashtbl.iter (fun k v -> Tcmap.put tcmap k (String.length k) v (String.length v)) t
 end
 
 module Tcmap_tcmap =
@@ -283,6 +297,10 @@ struct
 
   external of_tcmap : Tcmap.t -> t = "%identity"
   external to_tcmap : t -> Tcmap.t = "%identity"
+
+  let replace_tcmap t tcmap =
+    if not (t == tcmap)
+    then invalid_arg "replace_tcmap"
 end
 
 module ADB =
@@ -904,7 +922,6 @@ struct
     type tclist_t = Tcl.t
     type tcmap_t = Tcm.t
 
-
     external new_ : unit -> t = "otoky_tdb_new"
 
     external _adddouble : t -> string -> int -> float -> float = "otoky_tdb_adddouble"
@@ -1038,12 +1055,12 @@ struct
     type tcmap_t
 
     val new_ : TDB.t -> t
+    val metasearch : ?setop:msetop -> t list -> tclist_t
 
     val addcond : t -> string -> ?negate:bool -> ?noidx:bool -> qcond -> string -> unit
     val hint : t -> string
     val kwic : t -> ?name:string -> ?width:int -> ?opts:kopt list -> tcmap_t -> tclist_t
-    val metasearch : t -> ?setop:msetop -> t list -> tclist_t
-    val proc : t -> (string -> tcmap_t -> qpost list) -> unit
+    val proc : t -> (string -> tcmap_t ref -> qpost list) -> unit
     val search : t -> tclist_t
     val searchout : t -> unit
     val setlimit : t -> ?max:int -> ?skip:int -> unit -> unit
@@ -1055,17 +1072,56 @@ struct
     type tclist_t = Tcl.t
     type tcmap_t = Tcm.t
 
-    let new_ tdb = failwith "unimplemented"
+    external new_ : TDB.t -> t = "otoky_tdbqry_new"
 
-    let addcond t name ?negate ?noidx op expr = failwith "unimplemented"
-    let hint t = failwith "unimplemented"
-    let kwic t ?name ?width ?opts cols = failwith "unimplemented"
-    let metasearch t ?setop others = failwith "unimplemented"
-    let proc t func = failwith "unimplemented"
-    let search t = failwith "unimplemented"
-    let searchout t = failwith "unimplemented"
-    let setlimit t ?max ?skip () = failwith "unimplemented"
-    let setorder t string qord = failwith "unimplemented"
+    external addcond : t -> string -> ?negate:bool -> ?noidx:bool -> qcond -> string -> unit =
+        "otoky_tdbqry_addcond_bc" "otoky_tdbqry_addcond"
+    external hint : t -> string = "otoky_tdbqry_hint"
+
+    external _kwic : t -> ?name:string -> ?width:int -> ?opts:kopt list -> Tcmap.t -> Tclist.t = "otoky_tdbqry_kwic"
+    let kwic t ?name ?width ?opts cols =
+      let tclist =
+        if Tcm.del
+        then
+          let cols_tcmap = Tcm.to_tcmap cols in
+          let tclist =
+            try _kwic t ?name ?width ?opts cols_tcmap
+            with e -> Tcmap.del cols_tcmap; raise e in
+          Tcmap.del cols_tcmap;
+          tclist
+        else
+          _kwic t ?name ?width ?opts (Tcm.to_tcmap cols) in
+      let r = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      r
+
+    external _metasearch : ?setop:msetop -> t list -> Tclist.t = "otoky_tdbqry_metasearch"
+    let metasearch ?setop qrys =
+      let tclist = _metasearch ?setop qrys in
+      let r = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      r
+
+    external _proc : t -> (string -> Tcmap.t -> qpost list) -> unit = "otoky_tdbqry_proc"
+    let proc t func =
+      _proc t begin fun key tcmap ->
+        let cols = ref (Tcm.of_tcmap tcmap) in
+        let qposts = func key cols in
+        if List.mem Qp_put qposts
+        then Tcm.replace_tcmap !cols tcmap;
+        qposts
+      end
+
+    external _search : t -> Tclist.t = "otoky_tdbqry_search"
+    let search t =
+      let tclist = _search t in
+      let r = Tcl.of_tclist tclist in
+      if Tcl.del then Tclist.del tclist;
+      r
+
+    external searchout : t -> unit = "otoky_tdbqry_searchout"
+    external setlimit : t -> ?max:int -> ?skip:int -> unit -> unit = "otoky_tdbqry_setlimit"
+    external setorder : t -> string -> qord -> unit = "otoky_tdbqry_setorder"
   end
 
   include Fun (Tclist_list) (Tcmap_list)
