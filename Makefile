@@ -1,4 +1,4 @@
-PKGLIST=tokyo_cabinet
+-include Makefile.conf
 
 all:
 	for pkg in $(PKGLIST); do \

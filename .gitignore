@@ -8,3 +8,6 @@
 *.so
 *~
 #*
+_build
+Makefile.conf
+src/type_hash/myocamlbuild.ml
