@@ -1,0 +1,5 @@
+name="Tokyo Tyrant"
+version="0.1"
+description="Binding to Tokyo Tyrant"
+archive(byte) = "tokyo_tyrant.cma"
+archive(native) = "tokyo_tyrant.cmxa"

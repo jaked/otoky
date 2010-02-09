@@ -19,24 +19,22 @@ C_OBJS=\
 CAML_OBJS=\
   tokyo_cabinet.cmo
 
-all: libotoky.a tokyo_cabinet.cmi otoky.cma
+all: libtokyo_cabinet.a tokyo_cabinet.cmi tokyo_cabinet.cma tokyo_cabinet.cmxa
 
-opt: libotoky.a tokyo_cabinet.cmi otoky.cmxa
+libtokyo_cabinet.a: $(C_OBJS)
+	$(MKLIB) -o tokyo_cabinet $(C_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
 
-libotoky.a: $(C_OBJS)
-	$(MKLIB) -o otoky $(C_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
+tokyo_cabinet.cma: $(CAML_OBJS)
+	$(MKLIB) -o tokyo_cabinet $(CAML_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
 
-otoky.cma: $(CAML_OBJS)
-	$(MKLIB) -o otoky $(CAML_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
-
-otoky.cmxa: $(CAML_OBJS:.cmo=.cmx)
-	$(MKLIB) -o otoky $(CAML_OBJS:.cmo=.cmx) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
+tokyo_cabinet.cmxa: $(CAML_OBJS:.cmo=.cmx)
+	$(MKLIB) -o tokyo_cabinet $(CAML_OBJS:.cmo=.cmx) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
 
 install:
-	ocamlfind install otoky META *.cmi *.mli *.cma *.cmxa *.a *.so
+	ocamlfind install tokyo_cabinet META *.cmi *.mli *.cma *.cmxa *.a *.so
 
 uninstall:
-	ocamlfind remove otoky
+	ocamlfind remove tokyo_cabinet
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
