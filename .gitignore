@@ -10,4 +10,4 @@
 #*
 _build
 Makefile.conf
-src/type_hash/myocamlbuild.ml
+src/type_desc/myocamlbuild.ml

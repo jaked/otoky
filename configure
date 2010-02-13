@@ -191,7 +191,7 @@ echo "Effective options:"
 print_options
 echo
 
-pkglist="type_hash tokyo_cabinet"
+pkglist="type_desc tokyo_cabinet"
 
 ######################################################################
 # Write Makefile.conf

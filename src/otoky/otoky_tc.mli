@@ -5,7 +5,7 @@ type cpmode
 module type Type =
 sig
   type t
-  (* XXX with bin-prot, type_hash *)
+  (* XXX with bin-prot, type_desc *)
 end
 
 module BDB (K : Type) (V : Type) :

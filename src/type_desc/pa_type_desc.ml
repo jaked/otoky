@@ -3,7 +3,7 @@ open Pa_type_conv
 
 let _loc = Loc.ghost
 
-let type_hash_ id = "type_hash_" ^ id
+let type_desc_ id = "type_desc_" ^ id
 
 (* arrows t1..tn t => t1 -> .. -> tn -> t *)
 let arrows ts t = List.fold_right (fun t a -> <:ctyp< $t$ -> $a$ >>)  ts t
@@ -91,7 +91,7 @@ let type_desc bound_ids _loc t =
           | [ <:ident< $lid:id$ >> ] when List.mem id bound_ids ->
               <:expr< `Var $`str:id$ >>
           | <:ident< $lid:id$ >>::uids ->
-              let ids = List.rev (<:ident< $lid:type_hash_ id$ >>::uids) in
+              let ids = List.rev (<:ident< $lid:type_desc_ id$ >>::uids) in
               <:expr< $id:<:ident< $list:ids$ >>$ >>
           | _ -> assert false
         end
@@ -160,11 +160,11 @@ let gen_str tds =
             (fun v -> if List.mem v vars' then <:expr< $lid:v$ >> else <:expr< `Unit >>)
             vars in
         let t = tapps (List.map (fun v -> <:ctyp< '$v$ >>) vars') <:ctyp< $lid:id$ >> in
-        let ret = <:ctyp< $t$ Type_hash.t >> in
-        let targs = List.map (fun v -> <:ctyp< '$v$ Type_hash.t >>) vars' in
+        let ret = <:ctyp< $t$ Type_desc.t >> in
+        let targs = List.map (fun v -> <:ctyp< '$v$ Type_desc.t >>) vars' in
         <:str_item<
-          let $lid:type_hash_ id$ =
-            ($funs_ids vars' <:expr< Type_hash.make (`Project ($`str:id$, $apps <:expr< $lid:bundle_id$ >> args$)) >>$ :
+          let $lid:type_desc_ id$ =
+            ($funs_ids vars' <:expr< Type_desc.make (`Project ($`str:id$, $apps <:expr< $lid:bundle_id$ >> args$)) >>$ :
               $arrows targs ret$)
         >>)
       type_descs in
@@ -174,9 +174,9 @@ let gen_str tds =
 
 let sig_item _loc id vars =
   let t = tapps vars <:ctyp< $lid:id$ >> in
-  let ret = <:ctyp< $t$ Type_hash.t >> in
-  let args = List.map (fun v -> <:ctyp< $v$ Type_hash.t >>) vars in
-  <:sig_item< val $lid:type_hash_ id$ : $arrows args ret$ >>
+  let ret = <:ctyp< $t$ Type_desc.t >> in
+  let args = List.map (fun v -> <:ctyp< $v$ Type_desc.t >>) vars in
+  <:sig_item< val $lid:type_desc_ id$ : $arrows args ret$ >>
 
 let gen_sig tds =
   let sig_items =
@@ -191,5 +191,5 @@ let gen_sig tds =
 
 ;;
 
-Pa_type_conv.add_generator "type_hash" gen_str;
-Pa_type_conv.add_sig_generator "type_hash" gen_sig;
+Pa_type_conv.add_generator "type_desc" gen_str;
+Pa_type_conv.add_sig_generator "type_desc" gen_sig;

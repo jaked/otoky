@@ -1,6 +1,0 @@
-name="Type hash"
-version="0.1"
-description="type-conv extension for type hashes"
-requires="type-conv.syntax"
-archive(syntax,preprocessor) = "pa_type_hash.cmo"
-archive(syntax,toploop) = "pa_type_hash.cmo"
