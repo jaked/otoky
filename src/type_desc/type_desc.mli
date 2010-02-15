@@ -27,4 +27,5 @@ type s = [
 | `Project of string * s
 ]
 
-val make : s -> 'a t
+val hide : s -> 'a t
+val show : 'a t -> s

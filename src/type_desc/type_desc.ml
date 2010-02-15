@@ -119,7 +119,8 @@ and norm_polyvar arms =
 
 type 'a t = s
 
-let make s = s
+let hide s = s
+let show t = t
 
 let to_hash s = failwith "unimplemented"
 

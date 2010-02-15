@@ -100,11 +100,18 @@ let type_desc bound_ids _loc t =
         let rec loop args = function
           | <:ctyp< $t2$ $t1$ >> -> loop (td t2 :: args) t1
           | t ->
-              (* a reference to a type being defined shouldn't be applied; it's just a tag *)
               let td = td t in
               match td with
-                | <:expr< `Var $_$ >> -> td
-                | _ -> apps td args in
+                | <:expr< `Var $_$ >> ->
+		  (* a reference to a type being defined shouldn't be applied; it's just a tag *)
+		  td
+		| <:expr< $id:_$ >>
+		| <:expr< $_$ $_$ >> ->
+		  (* an identifier or an application is already a Type_desc.t *)
+		  apps td args
+                | _ ->
+		  (* everything else is a Type_desc.s *)
+		  apps td (List.map (fun e -> <:expr< Type_desc.hide $e$ >>) args) in
         loop [] t
 
     | _ -> failwith "unimplemented" in
@@ -157,14 +164,14 @@ let gen_str tds =
       (fun (id, vars', _) ->
         let args =
           List.map
-            (fun v -> if List.mem v vars' then <:expr< $lid:v$ >> else <:expr< `Unit >>)
+            (fun v -> if List.mem v vars' then <:expr< Type_desc.show $lid:v$ >> else <:expr< `Unit >>)
             vars in
         let t = tapps (List.map (fun v -> <:ctyp< '$v$ >>) vars') <:ctyp< $lid:id$ >> in
         let ret = <:ctyp< $t$ Type_desc.t >> in
         let targs = List.map (fun v -> <:ctyp< '$v$ Type_desc.t >>) vars' in
         <:str_item<
           let $lid:type_desc_ id$ =
-            ($funs_ids vars' <:expr< Type_desc.make (`Project ($`str:id$, $apps <:expr< $lid:bundle_id$ >> args$)) >>$ :
+            ($funs_ids vars' <:expr< Type_desc.hide (`Project ($`str:id$, $apps <:expr< $lid:bundle_id$ >> args$)) >>$ :
               $arrows targs ret$)
         >>)
       type_descs in
