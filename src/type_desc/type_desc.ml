@@ -51,6 +51,18 @@ type s = [
 | `Project of string * s (* = `Bundle *)
 ]
 
+let norm_polyvar arms =
+  let rec flatten tags arms =
+    List.fold_left
+      (fun tags -> function
+         | `Tag (tag, s) -> (tag, s)::tags
+         | `Extend (`Polyvar arms) -> flatten tags arms
+         | _ -> assert false)
+      tags arms in
+  List.sort
+    (fun (tag1, _) (tag2, _) -> compare tag1 tag2)
+    (flatten [] arms)
+
 let rec equal s1 s2 =
   match s1, s2 with
     | `Unit, `Unit -> true
@@ -105,23 +117,62 @@ let rec equal s1 s2 =
 
     | _ -> false
 
-and norm_polyvar arms =
-  let rec flatten tags arms =
-    List.fold_left
-      (fun tags -> function
-        | `Tag (tag, s) -> (tag, s)::tags
-        | `Extend (`Polyvar arms) -> List.fold_left flatten tags arms
-        | _ -> assert false)
-      tags arms in
-  List.sort
-    (fun (tag1, _) (tag2, _) -> compare tag1 tag2)
-    (flatten [] arms)
-
 type 'a t = s
 
 let hide s = s
 let show t = t
 
-let to_hash s = failwith "unimplemented"
-
-let to_printable s = failwith "unimplemented"
+(* to_string s1 = to_string s2 <=> equal s1 s2 *)
+let to_string s =
+  let b = Buffer.create 256 in
+  let add = Buffer.add_string b in
+  let rec to_s : s -> unit = function
+    | `Unit -> add "unit"
+    | `Int -> add "int"
+    | `Int32 -> add "int32"
+    | `Int64 -> add "int64"
+    | `Float -> add "float"
+    | `Bool -> add "bool"
+    | `Char -> add "char"
+    | `String -> add "string"
+    | `Tuple parts ->
+	add "(tuple";
+	List.iter (fun s -> add " "; to_s s) parts;
+	add ")"
+    | `Sum arms ->
+	add "(sum";
+	List.iter
+	  (fun (tag, parts) ->
+	     add " ";
+	     match parts with
+	       | [] -> add tag;
+	       | _ -> add "("; add tag; List.iter (fun s -> add " "; to_s s) parts; add ")")
+	  arms;
+	add ")";
+    | `Record fields ->
+	add "(record";
+	List.iter (fun (name, s) -> add " ("; add name; add " "; to_s s) fields;
+	add ")";
+    | `Polyvar arms ->
+	add "(polyvar";
+	List.iter
+	  (fun (tag, so) ->
+	     add " ";
+	     match so with
+	       | None -> add tag;
+	       | Some s -> add "("; add tag; to_s s; add ")")
+	  (norm_polyvar arms);
+	add ")";
+    | `List s -> add "(list "; to_s s; add ")"
+    | `Option s -> add "(option "; to_s s; add ")"
+    | `Array s -> add "(array "; to_s s; add ")"
+    | `Hashtbl (k, v) -> add "(hashtbl "; to_s k; add " "; to_s v; add ")"
+    | `Var s -> add "(var "; add s; add ")"
+    | `Bundle parts ->
+	add "(bundle";
+	List.iter (fun (name, s) -> add " ("; add name; add " "; to_s s; add ")") parts;
+	add ")";
+    | `Project (name, s) ->
+	add "(project "; add name; add " "; to_s s; add ")" in
+  to_s s;
+  Buffer.contents b

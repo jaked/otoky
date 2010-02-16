@@ -1,7 +1,8 @@
 type 'a t
 
-val to_hash : 'a t -> string
-val to_printable : 'a t -> string
+val equal: 'a t -> 'a t -> bool
+
+val to_string : 'a t -> string
 
 (* private interface *)
 
