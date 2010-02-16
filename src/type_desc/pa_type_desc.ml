@@ -92,26 +92,29 @@ let type_desc bound_ids _loc t =
               <:expr< `Var $`str:id$ >>
           | <:ident< $lid:id$ >>::uids ->
               let ids = List.rev (<:ident< $lid:type_desc_ id$ >>::uids) in
-              <:expr< $id:<:ident< $list:ids$ >>$ >>
+              <:expr< Type_desc.show $id:<:ident< $list:ids$ >>$ >>
           | _ -> assert false
         end
 
     | <:ctyp< $_$ $_$ >> as t ->
         let rec loop args = function
-          | <:ctyp< $t2$ $t1$ >> -> loop (td t2 :: args) t1
+          | <:ctyp< $t2$ $t1$ >> ->
+	      let arg =
+	        match td t2 with
+		    (* an identifier or an application is already a Type_desc.t *)
+		  | <:expr< $id:_$ >>
+		  | <:expr< $_$ $_$ >> as e -> e
+		    (* everything else is a Type_desc.s *)
+		  | e -> <:expr< Type_desc.hide $e$ >> in
+	      loop (arg :: args) t1
           | t ->
-              let td = td t in
-              match td with
-                | <:expr< `Var $_$ >> ->
+              match td t with
 		  (* a reference to a type being defined shouldn't be applied; it's just a tag *)
-		  td
-		| <:expr< $id:_$ >>
-		| <:expr< $_$ $_$ >> ->
-		  (* an identifier or an application is already a Type_desc.t *)
-		  apps td args
-                | _ ->
-		  (* everything else is a Type_desc.s *)
-		  apps td (List.map (fun e -> <:expr< Type_desc.hide $e$ >>) args) in
+                | <:expr< `Var $_$ >> as e -> e
+                  (* we wrap show around an identifier before we know it is applied *)
+		| <:expr< Type_desc.show $e$ >> ->
+		    <:expr< Type_desc.show $apps e args$ >>
+                | _ -> assert false in (* XXX syntax error, raise friendly error *)
         loop [] t
 
     | _ -> failwith "unimplemented" in
