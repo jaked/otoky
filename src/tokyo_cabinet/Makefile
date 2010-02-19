@@ -6,9 +6,11 @@ TOKYO_LIBS=-ltokyocabinet
 
 CFLAGS=-O -I$(TOKYO_INCLUDE)
 
+COMPFLAGS=-package tokyo_common
+
 OCAMLRUN=ocamlrun
-OCAMLC=ocamlc -g
-OCAMLOPT=ocamlopt
+OCAMLC=ocamlfind ocamlc -g
+OCAMLOPT=ocamlfind ocamlopt
 OCAMLDEP=ocamldep
 MKLIB=ocamlmklib
 OCAMLDOC=ocamldoc

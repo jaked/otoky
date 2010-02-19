@@ -1,5 +1,6 @@
 name="Tokyo Cabinet"
 version="0.1"
 description="Binding to Tokyo Cabinet"
+requires="tokyo_common"
 archive(byte) = "tokyo_cabinet.cma"
 archive(native) = "tokyo_cabinet.cmxa"
