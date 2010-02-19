@@ -1,0 +1,5 @@
+name="Tokyo Common"
+version="0.1"
+description="Common utilities for Tokyo {Cabinet, Tyrant}"
+archive(byte) = "tokyo_common.cma"
+archive(native) = "tokyo_common.cmxa"
