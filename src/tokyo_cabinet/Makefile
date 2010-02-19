@@ -14,7 +14,7 @@ MKLIB=ocamlmklib
 OCAMLDOC=ocamldoc
 
 C_OBJS=\
-  stubs-cabinet.o
+  tokyo_cabinet_stubs.o
 
 CAML_OBJS=\
   tokyo_cabinet.cmo
