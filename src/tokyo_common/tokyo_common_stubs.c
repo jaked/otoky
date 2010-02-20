@@ -7,6 +7,7 @@
 #include <caml/fail.h>
 #include <caml/memory.h>
 #include <caml/signals.h>
+#include <caml/bigarray.h>
 
 #include <tcadb.h>
 
@@ -22,6 +23,16 @@ value otoky_cstr_del(value vcstr)
 {
   tcfree((void *)Field(vcstr, 0));
   return Val_unit;
+}
+
+CAMLprim
+value otoky_cstr_to_bigarray(value vcstr)
+{
+  intnat dims[1] = { Long_val(Field(vcstr, 1)) };
+  return caml_ba_alloc(CAML_BA_C_LAYOUT | CAML_BA_UINT8,
+                       1,
+                       (void *)Field(vcstr, 0),
+                       dims);
 }
 
 

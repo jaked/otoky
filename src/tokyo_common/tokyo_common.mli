@@ -3,7 +3,7 @@ sig
   type t = string * int
 
   external del : t -> unit = "otoky_cstr_del"
-
+  external to_bigarray : t -> (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t = "otoky_cstr_to_bigarray"
   val copy : t -> string
   val of_string : string -> t
 end
