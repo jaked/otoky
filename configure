@@ -191,7 +191,7 @@ echo "Effective options:"
 print_options
 echo
 
-pkglist="tokyo_common tokyo_cabinet type_desc"
+pkglist="tokyo_common tokyo_cabinet tokyo_tyrant type_desc"
 
 ######################################################################
 # Write Makefile.conf
