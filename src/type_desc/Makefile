@@ -7,14 +7,24 @@ pa_type_desc.cmo \
 
 BFILES=$(addprefix _build/,$(FILES))
 
+PACKAGE=type_desc
+
+INSTALL=META $(BFILES)
+
 all: myocamlbuild.ml
 	ocamlbuild type_desc.cma type_desc.cmxa pa_type_desc.cmo
+	ocamlfind remove -destdir ../../stage $(PACKAGE)
+	ocamlfind install -destdir ../../stage $(PACKAGE) $(INSTALL)
+
+doc:
+	OCAMLPATH=`pwd`/../../stage \
+	ocamlbuild -no-links doc.docdir/index.html
 
 install:
-	ocamlfind install type_desc META $(BFILES)
+	ocamlfind install $(PACKAGE) $(INSTALL)
 
 uninstall:
-	ocamlfind remove type_desc
+	ocamlfind remove $(PACKAGE)
 
 clean:
 	ocamlbuild -clean

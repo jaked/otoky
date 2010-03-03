@@ -1,3 +1,5 @@
+-include ../../Makefile.conf
+
 # based on the Cryptokit Makefile
 
 TOKYO_INCLUDE=/usr/local/include
@@ -9,19 +11,23 @@ CFLAGS=-O -I$(TOKYO_INCLUDE)
 COMPFLAGS=-package tokyo_common
 
 OCAMLRUN=ocamlrun
-OCAMLC=ocamlfind ocamlc -g
-OCAMLOPT=ocamlfind ocamlopt
+OCAMLC=OCAMLFIND_LDCONF=`pwd`/../../stage/ld.conf OCAMLPATH=`pwd`/../../stage ocamlfind ocamlc
+OCAMLOPT=OCAMLFIND_LDCONF=`pwd`/../../stage/ld.conf OCAMLPATH=`pwd`/../../stage ocamlfind ocamlopt
 OCAMLDEP=ocamldep
 MKLIB=ocamlmklib
 OCAMLDOC=ocamldoc
 
-C_OBJS=\
-  tokyo_tyrant_stubs.o
+C_OBJS=tokyo_tyrant_stubs.o
 
-CAML_OBJS=\
-  tokyo_tyrant.cmo
+CAML_OBJS=tokyo_tyrant.cmo
+
+PACKAGE=tokyo_tyrant
+
+INSTALL= META *.cmi *.mli *.cma *.cmxa *.a *.so
 
 all: libtokyo_tyrant.a tokyo_tyrant.cmi tokyo_tyrant.cma tokyo_tyrant.cmxa
+	ocamlfind remove -ldconf ../../stage/ld.conf -destdir ../../stage $(PACKAGE)
+	ocamlfind install -ldconf ../../stage/ld.conf -destdir ../../stage $(PACKAGE) $(INSTALL)
 
 libtokyo_tyrant.a: $(C_OBJS)
 	$(MKLIB) -o tokyo_tyrant $(C_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
@@ -33,10 +39,10 @@ tokyo_tyrant.cmxa: $(CAML_OBJS:.cmo=.cmx)
 	$(MKLIB) -o tokyo_tyrant $(CAML_OBJS:.cmo=.cmx) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
 
 install:
-	ocamlfind install tokyo_tyrant META *.cmi *.mli *.cma *.cmxa *.a *.so
+	ocamlfind install $(PACKAGE) $(INSTALL)
 
 uninstall:
-	ocamlfind remove tokyo_tyrant
+	ocamlfind remove $(PACKAGE)
 
 .SUFFIXES: .ml .mli .cmo .cmi .cmx
 
