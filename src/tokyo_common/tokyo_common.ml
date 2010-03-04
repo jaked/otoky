@@ -1,9 +1,11 @@
 module Cstr =
 struct
   type t = string * int
+  type buf = (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t
 
   external del : t -> unit = "otoky_cstr_del"
-  external to_bigarray : t -> (char, Bigarray.int8_unsigned_elt, Bigarray.c_layout) Bigarray.Array1.t = "otoky_cstr_to_bigarray"
+  external to_bigarray : t -> buf = "otoky_cstr_to_bigarray"
+  external of_bigarray : ?len:int -> buf -> t = "otoky_cstr_of_bigarray"
 
   let copy (s, len) =
     let r = String.create len in

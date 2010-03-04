@@ -28,11 +28,47 @@ value otoky_cstr_del(value vcstr)
 CAMLprim
 value otoky_cstr_to_bigarray(value vcstr)
 {
-  intnat dims[1] = { Long_val(Field(vcstr, 1)) };
+  intnat dims[1] = { Int_val(Field(vcstr, 1)) };
   return caml_ba_alloc(CAML_BA_C_LAYOUT | CAML_BA_UINT8,
                        1,
                        (void *)Field(vcstr, 0),
                        dims);
+}
+
+CAMLprim
+value otoky_cstr_of_bigarray(value vlen, value vba)
+{
+  CAMLparam1(vba);
+
+  value vpair = caml_alloc_tuple(3);
+  Field(vpair, 0) = (value)Caml_ba_data_val(vba);
+  Field(vpair, 1) = vlen == Val_int(0) ? Val_int(Caml_ba_array_val(vba)->dim[0]) : Field(vlen, 0);
+
+  /*
+    wow, this is a dirty hack. if we don't hang on to the Bigarray
+    pointer it might be gc'd, freeing the data the Cstr.t points
+    to. we don't otherwise need it. code expecting a pair doesn't care
+    if there's an extra field, although if the parts are copied to a
+    new pair we'd lose the Bigarray.
+
+    we could make this field explicit in Cstr.t, but the typing is
+    weird--we don't care about it, we can't use it, we don't want to
+    know about it. it should have existential type.
+
+    we could make Cstr.t an object (or pair of functions) so
+    implementations could use whatever underlying type they lik, but
+    it is supposed to be lightweight.
+
+    we could replace Cstr.t with Bigarray. but it is supposed to be
+    lightweight, and that would overcommit the interface.
+
+    we could make client code be responsible for the lifetime of the
+    Bigarray, but this hairs up the interface--e.g. a marshaller would
+    need to return a Cstr.t plus a cleanup function, or something.
+  */
+  Field(vpair, 2) = vba;
+
+  CAMLreturn(vpair);
 }
 
 
