@@ -22,8 +22,23 @@ struct
 
   let type_desc_hash_key = "__otoky_type_desc_hash__"
 
+  let is_type_desc_hash_key k klen =
+    if klen <> String.length type_desc_hash_key
+    then false
+    else
+      let rec loop i =
+        if i = klen then true
+        else if String.unsafe_get k i <> String.unsafe_get type_desc_hash_key i then false
+        else loop (i + 1) in
+      loop 0
+
   let compare_cstr t a alen b blen =
-    t.compare (t.unmarshall (a, alen)) (t.unmarshall (b, blen))
+    (* argh. maybe we should store the type_desc hash somewhere else. but where? *)
+    match is_type_desc_hash_key a alen, is_type_desc_hash_key b blen with
+      | true, true -> 0
+      | true, false -> -1
+      | false, true -> 1
+      | _ -> t.compare (t.unmarshall (a, alen)) (t.unmarshall (b, blen))
 end
 
 module BDB =
@@ -44,8 +59,8 @@ struct
     begin try
       if hash <> BDB.get bdb Type.type_desc_hash_key
       then begin
-	BDB.close bdb;
-	raise (Error (Einvalid, "bad type desc hash", "open_"))
+        BDB.close bdb;
+        raise (Error (Einvalid, "bad type_desc hash", "open_"))
       end
     with Error (Enorec, _, _) ->
       (* XXX maybe should check that this is a fresh db? *)
@@ -75,11 +90,11 @@ struct
       let num = Tclist.num tclist in
       let len = ref 0 in
       let rec loop k =
-	if k = num
-	then []
-	else
-	  let v = Tclist.val_ tclist k len in
-	  t.vtype.Type.unmarshall (v, !len) :: loop (k + 1) in
+        if k = num
+        then []
+        else
+          let v = Tclist.val_ tclist k len in
+          t.vtype.Type.unmarshall (v, !len) :: loop (k + 1) in
       let r = loop 0 in
       Tclist.del tclist;
       r
