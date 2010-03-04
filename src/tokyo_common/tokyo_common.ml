@@ -31,7 +31,7 @@ module Cstr_string =
 struct
   type t = string
 
-  let del = false
+  let del = true
 
   let of_cstr = Cstr.copy
   let to_cstr = Cstr.of_string
@@ -44,7 +44,7 @@ module Cstr_cstr =
 struct
   type t = Cstr.t
 
-  let del = true
+  let del = false
 
   external of_cstr : Cstr.t -> t = "%identity"
   external to_cstr : Cstr.t -> t = "%identity"
