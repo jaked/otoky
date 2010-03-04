@@ -1,15 +1,23 @@
-type 'a typ = {
-  type_desc : 'a Type_desc.t;
-  marshall : 'a -> Tokyo_common.Cstr.t;
-  unmarshall : Tokyo_common.Cstr.t -> 'a;
-  compare : 'a -> 'a -> int; (* only needed for BDB *)
-}
+open Tokyo_common
+open Tokyo_cabinet
+
+module Type :
+sig
+  type 'a t
+
+  val make :
+    type_desc : 'a Type_desc.t ->
+    marshall : ('a -> Cstr.t) ->
+    unmarshall : (Cstr.t -> 'a) ->
+    compare : ('a -> 'a -> int) ->
+    'a t
+end
 
 module BDB :
 sig
   type ('k, 'v) t
 
-  val open_ : ?omode:Tokyo_cabinet.omode list -> 'k typ -> 'v typ -> string -> ('k, 'v) t
+  val open_ : ?omode:omode list -> 'k Type.t -> 'v Type.t -> string -> ('k, 'v) t
 
   val close : ('k, 'v) t -> unit
   val copy : ('k, 'v) t -> string -> unit
@@ -19,7 +27,7 @@ sig
 
   val optimize :
     ('k, 'v) t ->
-    ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:Tokyo_cabinet.opt list -> unit ->
+    ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit ->
     unit
 
   val out : ('k, 'v) t -> 'k -> unit
@@ -46,7 +54,7 @@ sig
 
   val tune :
     ('k, 'v) t ->
-    ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:Tokyo_cabinet.opt list -> unit ->
+    ?lmemb:int32 -> ?nmemb:int32 -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit ->
     unit
 
   val vanish : ('k, 'v) t -> unit
@@ -67,7 +75,7 @@ sig
   val next : ('k, 'v) t -> unit
   val out : ('k, 'v) t -> unit
   val prev : ('k, 'v) t -> unit
-  val put : ('k, 'v) t -> ?cpmode:Tokyo_cabinet.BDBCUR.cpmode -> 'v -> unit
+  val put : ('k, 'v) t -> ?cpmode:BDBCUR.cpmode -> 'v -> unit
   val val_ : ('k, 'v) t -> 'v
 end
 
@@ -75,7 +83,7 @@ module FDB :
 sig
   type 'v t
 
-  val open_ : ?omode:Tokyo_cabinet.omode list -> 'v typ -> string -> 'v t
+  val open_ : ?omode:omode list -> 'v Type.t -> string -> 'v t
 
   val close : 'v t -> unit
   val copy : 'v t -> string -> unit
@@ -103,7 +111,7 @@ module HDB :
 sig
   type ('k, 'v) t
 
-  val open_ : ?omode:Tokyo_cabinet.omode list -> 'k typ -> 'v typ -> string -> ('k, 'v) t
+  val open_ : ?omode:omode list -> 'k Type.t -> 'v Type.t -> string -> ('k, 'v) t
 
   val close : ('k, 'v) t -> unit
   val copy : ('k, 'v) t -> string -> unit
@@ -111,7 +119,7 @@ sig
   val get : ('k, 'v) t -> 'k -> 'v
   val iterinit : ('k, 'v) t -> unit
   val iternext : ('k, 'v) t -> 'k
-  val optimize : ('k, 'v) t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:Tokyo_cabinet.opt list -> unit -> unit
+  val optimize : ('k, 'v) t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
   val out : ('k, 'v) t -> 'k -> unit
   val path : ('k, 'v) t -> string
   val put : ('k, 'v) t -> 'k -> 'v -> unit
@@ -125,7 +133,7 @@ sig
   val tranabort : ('k, 'v) t -> unit
   val tranbegin : ('k, 'v) t -> unit
   val trancommit : ('k, 'v) t -> unit
-  val tune : ('k, 'v) t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:Tokyo_cabinet.opt list -> unit -> unit
+  val tune : ('k, 'v) t -> ?bnum:int64 -> ?apow:int -> ?fpow:int -> ?opts:opt list -> unit -> unit
   val vanish : ('k, 'v) t -> unit
   val vsiz : ('k, 'v) t -> 'k -> int
 end
