@@ -1,0 +1,6 @@
+name="Otoky"
+version="0.1"
+description="type-safe access to Tokyo Cabinet"
+requires="tokyo_cabinet"
+archive(byte) = "otoky.cma"
+archive(native) = "otoky.cmxa"
