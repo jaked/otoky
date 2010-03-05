@@ -23,6 +23,7 @@ struct
   let type_desc_hash_key = "__otoky_type_desc_hash__"
 
   let is_type_desc_hash_key k klen =
+    (* argh. maybe we should store the type_desc hash somewhere else. but where? *)
     if klen <> String.length type_desc_hash_key
     then false
     else
@@ -32,13 +33,49 @@ struct
         else loop (i + 1) in
       loop 0
 
+  let marshall_key t k func =
+    let (k, klen) as mk = t.marshall k in
+    if is_type_desc_hash_key k klen
+    then raise (Error (Einvalid, "marshalled value is type_desc_hash key", func))
+    else mk
+
   let compare_cstr t a alen b blen =
-    (* argh. maybe we should store the type_desc hash somewhere else. but where? *)
     match is_type_desc_hash_key a alen, is_type_desc_hash_key b blen with
       | true, true -> 0
       | true, false -> -1
       | false, true -> 1
       | _ -> t.compare (t.unmarshall (a, alen)) (t.unmarshall (b, blen))
+
+  let unmarshall_tclist t tclist =
+    try
+      let num = Tclist.num tclist in
+      let len = ref 0 in
+      let rec loop k =
+        if k = num
+        then []
+        else
+          let v = Tclist.val_ tclist k len in
+          if is_type_desc_hash_key v !len (* XXX could make this a flag *)
+          then loop (k + 1)
+          else
+            let v = t.unmarshall (v, !len) in
+            v :: loop (k + 1) in
+      let r = loop 0 in
+      Tclist.del tclist;
+      r
+    with e -> Tclist.del tclist; raise e
+
+  let marshall_tclist t list =
+    let anum = List.length list in
+    let tclist = Tclist.new_ ~anum () in
+    try
+      List.iter
+        (fun v ->
+           let (s, len) = t.marshall v in
+           Tclist.push tclist s len)
+        list;
+      tclist
+    with e -> Tclist.del tclist; raise e
 end
 
 module BDB =
@@ -77,7 +114,7 @@ struct
   let fsiz t = BDB.fsiz t.bdb
 
   let get t k =
-    let cstr = BDB_raw.get t.bdb (t.ktype.Type.marshall k) in
+    let cstr = BDB_raw.get t.bdb (Type.marshall_key t.ktype k "get") in
     try
       let v = t.vtype.Type.unmarshall cstr in
       Cstr.del cstr;
@@ -85,33 +122,34 @@ struct
     with e -> Cstr.del cstr; raise e
 
   let getlist t k =
-    let tclist = BDB_raw.getlist t.bdb (t.ktype.Type.marshall k) in
-    try
-      let num = Tclist.num tclist in
-      let len = ref 0 in
-      let rec loop k =
-        if k = num
-        then []
-        else
-          let v = Tclist.val_ tclist k len in
-          t.vtype.Type.unmarshall (v, !len) :: loop (k + 1) in
-      let r = loop 0 in
-      Tclist.del tclist;
-      r
-    with e -> Tclist.del tclist; raise e
+    Type.unmarshall_tclist t.vtype
+      (BDB_raw.getlist t.bdb (Type.marshall_key t.ktype k "getlist"))
 
   let optimize t ?lmemb ?nmemb ?bnum ?apow ?fpow ?opts () =
     BDB.optimize t.bdb ?lmemb ?nmemb ?bnum ?apow ?fpow ?opts ()
 
-  let out t k = BDB_raw.out t.bdb (t.ktype.Type.marshall k)
-  let outlist t k = BDB_raw.outlist t.bdb (t.ktype.Type.marshall k)
+  let out t k = BDB_raw.out t.bdb (Type.marshall_key t.ktype k "out")
+  let outlist t k = BDB_raw.outlist t.bdb (Type.marshall_key t.ktype k "outlist")
   let path t = BDB.path t.bdb
-  let put t k v = BDB_raw.put t.bdb (t.ktype.Type.marshall k) (t.vtype.Type.marshall v)
-  let putdup t k v = BDB_raw.putdup t.bdb (t.ktype.Type.marshall k) (t.vtype.Type.marshall v)
-  let putkeep t k v = BDB_raw.putkeep t.bdb (t.ktype.Type.marshall k) (t.vtype.Type.marshall v)
-  let putlist t k vs = failwith "unimplemented"
 
-  let range t ?bkey ?binc ?ekey ?einc ?max () = failwith "unimplemented"
+  let put t k v = BDB_raw.put t.bdb (Type.marshall_key t.ktype k "put") (t.vtype.Type.marshall v)
+  let putdup t k v = BDB_raw.putdup t.bdb (Type.marshall_key t.ktype k "putdup") (t.vtype.Type.marshall v)
+  let putkeep t k v = BDB_raw.putkeep t.bdb (Type.marshall_key t.ktype k "putkeep") (t.vtype.Type.marshall v)
+  let putlist t k vs =
+    let tclist = Type.marshall_tclist t.vtype vs in
+    try
+      BDB_raw.putlist t.bdb (Type.marshall_key t.ktype k "putlist") tclist;
+      Tclist.del tclist
+    with e -> Tclist.del tclist
+
+  let range t ?bkey ?binc ?ekey ?einc ?max () =
+    let marshall_key = function
+      | None -> None
+      | Some k -> Some (Type.marshall_key t.ktype k "range") in
+    let bkey = marshall_key bkey in
+    let ekey = marshall_key ekey in
+    Type.unmarshall_tclist t.ktype
+      (BDB_raw.range t.bdb ?bkey ?binc ?ekey ?einc ?max ())
 
   let rnum t = BDB.rnum t.bdb
   let setcache t ?lcnum ?ncnum () = BDB.setcache t.bdb ?lcnum ?ncnum ()
@@ -126,8 +164,8 @@ struct
     BDB.tune t.bdb ?lmemb ?nmemb ?bnum ?apow ?fpow ?opts ()
 
   let vanish t = BDB.vanish t.bdb
-  let vnum t k = failwith "unimplemented"
-  let vsiz t k = failwith "unimplemented"
+  let vnum t k = BDB_raw.vnum t.bdb (Type.marshall_key t.ktype k "vnum")
+  let vsiz t k = BDB_raw.vsiz t.bdb (Type.marshall_key t.ktype k "vsiz")
 end
 
 module BDBCUR =

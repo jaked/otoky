@@ -41,7 +41,7 @@ sig
   val range :
     ('k, 'v) t ->
     ?bkey:'k -> ?binc:bool -> ?ekey:'k -> ?einc:bool -> ?max:int -> unit ->
-    'v list
+    'k list
 
   val rnum : ('k, 'v) t -> int64
   val setcache : ('k, 'v) t -> ?lcnum:int32 -> ?ncnum:int32 -> unit -> unit
