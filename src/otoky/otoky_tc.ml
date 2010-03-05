@@ -170,23 +170,59 @@ end
 
 module BDBCUR =
 struct
+  module BDBCUR_raw = BDBCUR.Fun (Cstr_cstr)
+
   type ('k, 'v) t = {
     bdbcur : BDBCUR.t;
     ktype : 'k Type.t;
     vtype : 'v Type.t;
   }
 
-  let new_ bdb = failwith "unimplemented"
+  let new_ bdb = {
+    bdbcur = BDBCUR.new_ bdb.BDB.bdb;
+    ktype = bdb.BDB.ktype;
+    vtype = bdb.BDB.vtype;
+  }
 
-  let first t = failwith "unimplemented"
-  let jump t k = failwith "unimplemented"
-  let key t = failwith "unimplemented"
-  let last t = failwith "unimplemented"
-  let next t = failwith "unimplemented"
-  let out t = failwith "unimplemented"
-  let prev t = failwith "unimplemented"
-  let put t ?cpmode v = failwith "unimplemented"
-  let val_ t = failwith "unimplemented"
+  let first t =
+    (* first key should always be type_desc hash key *)
+    BDBCUR.first t.bdbcur;
+    BDBCUR.next t.bdbcur
+
+  let jump t k =
+    BDBCUR_raw.jump t.bdbcur (Type.marshall_key t.ktype k "jump")
+
+  let key t =
+    let cstr = BDBCUR_raw.key t.bdbcur in
+    try
+      let k = t.ktype.Type.unmarshall cstr in
+      Cstr.del cstr;
+      k
+    with e -> Cstr.del cstr; raise e
+
+  let last t = BDBCUR.last t.bdbcur
+  let next t = BDBCUR.next t.bdbcur
+  let out t = BDBCUR.out t.bdbcur
+
+  let prev t =
+    (* check to see if we've moved onto the type_desc hash key *)
+    BDBCUR.prev t.bdbcur;
+    let (k, klen) as cstr = BDBCUR_raw.key t.bdbcur in
+    try
+      if Type.is_type_desc_hash_key k klen
+      then BDBCUR.prev t.bdbcur;
+      Cstr.del cstr
+    with e -> Cstr.del cstr; raise e
+
+  let put t ?cpmode v = BDBCUR_raw.put t.bdbcur ?cpmode (t.vtype.Type.marshall v)
+
+  let val_ t =
+    let cstr = BDBCUR_raw.val_ t.bdbcur in
+    try
+      let v = t.vtype.Type.unmarshall cstr in
+      Cstr.del cstr;
+      v
+    with e -> Cstr.del cstr; raise e
 end
 
 module FDB =
