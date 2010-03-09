@@ -1502,6 +1502,15 @@ value otoky_fdb_vsiz(value vfdb, value vkey)
   return Val_int(r);
 }
 
+CAMLprim
+value otoky_fdb_width(value vfdb)
+{
+  fdb_wrap *fdbw = fdb_wrap_val(vfdb);
+  int32 r = fdbw->fdb->width;
+  if (r == 0) fdb_error(fdbw, "width");
+  return caml_copy_int32(r);
+}
+
 
 
 typedef struct hdb_wrap {

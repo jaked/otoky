@@ -419,6 +419,8 @@ struct
     val tune : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit
     val vanish : t -> unit
     val vsiz : t -> int64 -> int
+
+    val width : t -> int32
   end
 
   module Fun (Cs : Cstr_t) (Tcl : Tclist_t) =
@@ -473,6 +475,8 @@ struct
     external tune : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit = "otoky_fdb_tune"
     external vanish : t -> unit = "otoky_fdb_vanish"
     external vsiz : t -> int64 -> int = "otoky_fdb_vsiz"
+
+    external width : t -> int32 = "otoky_fdb_width"
   end
 
   include Fun (Cstr_string) (Tclist_list)

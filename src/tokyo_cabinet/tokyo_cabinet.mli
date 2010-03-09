@@ -197,6 +197,8 @@ sig
     val tune : t -> ?width:int32 -> ?limsiz:int64 -> unit -> unit
     val vanish : t -> unit
     val vsiz : t -> int64 -> int
+
+    val width : t -> int32
   end
 
   include Sig with type cstr_t = string and type tclist_t = string list
