@@ -391,7 +391,6 @@ struct
   module type Sig =
   sig
     type cstr_t
-    type tclist_t
 
     val new_ : unit -> t
 
@@ -410,7 +409,7 @@ struct
     val put : t -> int64 -> cstr_t -> unit
     val putcat : t -> int64 -> cstr_t -> unit
     val putkeep : t -> int64 -> cstr_t -> unit
-    val range : t -> ?max:int -> string -> tclist_t
+    val range : t -> ?lower:int64 -> ?upper:int64 -> ?max:int -> unit -> int64 array
     val rnum : t -> int64
     val sync : t -> unit
     val tranabort : t -> unit
@@ -423,10 +422,9 @@ struct
     val width : t -> int32
   end
 
-  module Fun (Cs : Cstr_t) (Tcl : Tclist_t) =
+  module Fun (Cs : Cstr_t) =
   struct
     type cstr_t = Cs.t
-    type tclist_t = Tcl.t
 
     external new_ : unit -> t = "otoky_fdb_new"
 
@@ -460,13 +458,7 @@ struct
     external _putkeep : t -> int64 -> string -> int -> unit = "otoky_fdb_putkeep"
     let putkeep t key value = _putkeep t key (Cs.string value) (Cs.length value)
 
-    external _range : t -> ?max:int -> string -> Tclist.t = "otoky_fdb_range"
-    let range t ?max interval =
-      let tclist = _range t ?max interval in
-      let r = Tcl.of_tclist tclist in
-      if Tcl.del then Tclist.del tclist;
-      r
-
+    external range : t -> ?lower:int64 -> ?upper:int64 -> ?max:int -> unit -> int64 array = "otoky_fdb_range"
     external rnum : t -> int64 = "otoky_fdb_rnum"
     external sync : t -> unit = "otoky_fdb_sync"
     external tranabort : t -> unit = "otoky_fdb_tranabort"
@@ -479,7 +471,7 @@ struct
     external width : t -> int32 = "otoky_fdb_width"
   end
 
-  include Fun (Cstr_string) (Tclist_list)
+  include Fun (Cstr_string)
 end
 
 module HDB =

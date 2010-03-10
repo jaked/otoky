@@ -1395,15 +1395,29 @@ value otoky_fdb_putkeep(value vfdb, value vkey, value vval, value vlen)
 }
 
 CAMLprim
-TCLIST *otoky_fdb_range(value vfdb, value vmax, value vinterval)
+value otoky_fdb_range(value vfdb, value vlower, value vupper, value vmax, value vunit)
 {
+  CAMLparam0();
+  CAMLlocal1(vkeys);
   fdb_wrap *fdbw = fdb_wrap_val(vfdb);
-  TCLIST *tclist;
+  uint64 *keys;
+  int i, n;
   caml_enter_blocking_section();
-  tclist = tcfdbrange4(fdbw->fdb, String_val(vinterval), caml_string_length(vinterval), int_option(vmax));
+  keys = tcfdbrange(fdbw->fdb,
+                    ((vlower == Val_int(0)) ? FDBIDMIN : Int64_val(Field(vlower, 0))),
+                    ((vupper == Val_int(0)) ? FDBIDMAX : Int64_val(Field(vupper, 0))),
+                    int_option(vmax),
+                    &n);
   caml_leave_blocking_section();
-  if (!tclist) fdb_error(fdbw, "range");
-  return tclist;
+  if (!keys) fdb_error(fdbw, "range");
+  if (n == 0)
+    vkeys = Atom(0);
+  else {
+    vkeys = caml_alloc(n, 0);
+    for (i = 0; i < n; i++)
+      Store_field(vkeys, i, caml_copy_int64(keys[i]));
+  }
+  CAMLreturn(vkeys);
 }
 
 CAMLprim

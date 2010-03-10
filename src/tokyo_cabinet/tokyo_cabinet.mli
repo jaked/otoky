@@ -169,7 +169,6 @@ sig
   module type Sig =
   sig
     type cstr_t
-    type tclist_t
 
     val new_ : unit -> t
 
@@ -188,7 +187,7 @@ sig
     val put : t -> int64 -> cstr_t -> unit
     val putcat : t -> int64 -> cstr_t -> unit
     val putkeep : t -> int64 -> cstr_t -> unit
-    val range : t -> ?max:int -> string -> tclist_t
+    val range : t -> ?lower:int64 -> ?upper:int64 -> ?max:int -> unit -> int64 array
     val rnum : t -> int64
     val sync : t -> unit
     val tranabort : t -> unit
@@ -201,9 +200,9 @@ sig
     val width : t -> int32
   end
 
-  include Sig with type cstr_t = string and type tclist_t = string list
+  include Sig with type cstr_t = string
 
-  module Fun (Cs : Cstr_t) (Tcl : Tclist_t) : Sig with type cstr_t = Cs.t and type tclist_t = Tcl.t
+  module Fun (Cs : Cstr_t) : Sig with type cstr_t = Cs.t
 end
 
 module HDB :
