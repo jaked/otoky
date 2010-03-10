@@ -36,7 +36,7 @@ struct
   let marshall_key t k func =
     let (k, klen) as mk = t.marshall k in
     if is_type_desc_hash_key k klen
-    then raise (Error (Einvalid, "marshalled value is type_desc_hash key", func))
+    then raise (Error (Einvalid, func, "marshalled value is type_desc_hash key"))
     else mk
 
   let compare_cstr t a alen b blen =
@@ -97,7 +97,7 @@ struct
       if hash <> BDB.get bdb Type.type_desc_hash_key
       then begin
         BDB.close bdb;
-        raise (Error (Einvalid, "bad type_desc hash", "open_"))
+        raise (Error (Einvalid, "open_", "bad type_desc hash"))
       end
     with Error (Enorec, _, _) ->
       (* XXX maybe should check that this is a fresh db? *)
