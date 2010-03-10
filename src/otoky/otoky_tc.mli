@@ -83,7 +83,7 @@ module FDB :
 sig
   type 'v t
 
-  val open_ : ?omode:omode list -> 'v Type.t -> string -> 'v t
+  val open_ : ?omode:omode list -> ?width:int32 -> 'v Type.t -> string -> 'v t
 
   val close : 'v t -> unit
   val copy : 'v t -> string -> unit
@@ -96,7 +96,7 @@ sig
   val path : 'v t -> string
   val put : 'v t -> int64 -> 'v -> unit
   val putkeep : 'v t -> int64 -> 'v -> unit
-  val range : 'v t -> ?max:int -> string -> string list (* XXX t*)
+  val range : 'v t -> ?lower:int64 -> ?upper:int64 -> ?max:int -> unit -> int64 array
   val rnum : 'v t -> int64
   val sync : 'v t -> unit
   val tranabort : 'v t -> unit

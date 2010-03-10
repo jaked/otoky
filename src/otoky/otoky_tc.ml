@@ -227,33 +227,109 @@ end
 
 module FDB =
 struct
+  module FDB_raw = FDB.Fun (Cstr_cstr)
+
   type 'v t = {
     fdb : FDB.t;
     vtype : 'v Type.t;
+    mutable width : int32;
   }
 
-  let open_ ?omode vtype fn = failwith "unimplemented"
+  let type_desc_hash_key = 1L
 
-  let close t = failwith "unimplemented"
-  let copy t fn = failwith "unimplemented"
-  let fsiz t = failwith "unimplemented"
-  let get t k = failwith "unimplemented"
-  let iterinit t = failwith "unimplemented"
-  let iternext t = failwith "unimplemented"
-  let optimize t ?width ?limsiz () = failwith "unimplemented"
-  let out t k = failwith "unimplemented"
-  let path t = failwith "unimplemented"
-  let put t k v = failwith "unimplemented"
-  let putkeep t k v = failwith "unimplemented"
-  let range t ?max:int spec = failwith "unimplemented"
-  let rnum t = failwith "unimplemented"
-  let sync t = failwith "unimplemented"
-  let tranabort t = failwith "unimplemented"
-  let tranbegin t = failwith "unimplemented"
-  let trancommit t = failwith "unimplemented"
-  let tune t ?width ?limsiz () = failwith "unimplemented"
-  let vanish t = failwith "unimplemented"
-  let vsiz t k = failwith "unimplemented"
+  let check_type_desc_hash_key k func =
+    if k = type_desc_hash_key
+    then raise (Error (Einvalid, func, "key is type_desc hash key"))
+
+  let marshall t v func =
+    let (_, len) as vm = t.vtype.Type.marshall v in
+    if Int32.of_int len > t.width
+    then raise (Error (Einvalid, func, "marshalled value exceeds width"));
+    vm
+
+  let open_ ?omode ?width vtype fn =
+    let fdb = FDB.new_ () in
+    begin match width with
+      | None -> ()
+      | Some width -> FDB.tune fdb ~width ()
+    end;
+    FDB.open_ fdb ?omode fn;
+    let width = FDB.width fdb in
+    let hash = Type.type_desc_hash vtype in
+    begin try
+      if hash <> FDB.get fdb type_desc_hash_key
+      then begin
+        FDB.close fdb;
+        raise (Error (Einvalid, "open_", "bad type_desc hash"))
+      end
+    with Error (Enorec, _, _) ->
+      (* XXX maybe should check that this is a fresh db? *)
+      FDB.put fdb type_desc_hash_key hash;
+    end;
+    {
+      fdb = fdb;
+      vtype = vtype;
+      width = width;
+    }
+
+
+  let close t = FDB.close t.fdb
+  let copy t fn = FDB.copy t.fdb fn
+  let fsiz t = FDB.fsiz t.fdb
+
+  let get t k =
+    check_type_desc_hash_key k "get";
+    let cstr = FDB_raw.get t.fdb k in
+    try
+      let v = t.vtype.Type.unmarshall cstr in
+      Cstr.del cstr;
+      v
+    with e -> Cstr.del cstr; raise e
+
+  let iterinit t = FDB.iterinit t.fdb
+
+  let iternext t =
+    let r = FDB.iternext t.fdb in
+    if r = type_desc_hash_key
+    then FDB.iternext t.fdb
+    else r
+
+  let optimize t ?width ?limsiz () =
+    (* XXX maybe should not be able to shrink the width. or we should check width of every record? *)
+    FDB.optimize t.fdb ?width ?limsiz ();
+    match width with
+      | None -> ()
+      | Some width -> t.width <- width
+
+  let out t k =
+    check_type_desc_hash_key k "out";
+    FDB.out t.fdb k
+
+  let path t = FDB.path t.fdb
+
+  let put t k v =
+    check_type_desc_hash_key k "put";
+    FDB_raw.put t.fdb k (marshall t v "put")
+
+  let putkeep t k v =
+    check_type_desc_hash_key k "put";
+    FDB_raw.putkeep t.fdb k (marshall t v "putkeep")
+
+  let range t ?lower ?upper ?max () =
+    (* XXX should remove the type_desc_hash_key *)
+    FDB.range t.fdb ?lower ?upper ?max ()
+
+  let rnum t = FDB.rnum t.fdb
+  let sync t = FDB.sync t.fdb
+  let tranabort t = FDB.tranabort t.fdb
+  let tranbegin t = FDB.tranbegin t.fdb
+  let trancommit t = FDB.trancommit t.fdb
+  let tune t ?width ?limsiz () = FDB.tune t.fdb ?width ?limsiz ()
+  let vanish t = FDB.vanish t.fdb
+
+  let vsiz t k =
+    check_type_desc_hash_key k "vsiz";
+    FDB.vsiz t.fdb k
 end
 
 module HDB =
