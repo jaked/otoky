@@ -1,23 +1,11 @@
 open Tokyo_common
 open Tokyo_cabinet
 
-module Type :
-sig
-  type 'a t
-
-  val make :
-    type_desc : 'a Type_desc.t ->
-    marshall : ('a -> Cstr.t) ->
-    unmarshall : (Cstr.t -> 'a) ->
-    compare : ('a -> 'a -> int) ->
-    'a t
-end
-
 module BDB :
 sig
   type ('k, 'v) t
 
-  val open_ : ?omode:omode list -> 'k Type.t -> 'v Type.t -> string -> ('k, 'v) t
+  val open_ : ?omode:omode list -> 'k Otoky_type.t -> 'v Otoky_type.t -> string -> ('k, 'v) t
 
   val close : ('k, 'v) t -> unit
   val copy : ('k, 'v) t -> string -> unit
@@ -83,7 +71,7 @@ module FDB :
 sig
   type 'v t
 
-  val open_ : ?omode:omode list -> ?width:int32 -> 'v Type.t -> string -> 'v t
+  val open_ : ?omode:omode list -> ?width:int32 -> 'v Otoky_type.t -> string -> 'v t
 
   val close : 'v t -> unit
   val copy : 'v t -> string -> unit
@@ -111,7 +99,7 @@ module HDB :
 sig
   type ('k, 'v) t
 
-  val open_ : ?omode:omode list -> 'k Type.t -> 'v Type.t -> string -> ('k, 'v) t
+  val open_ : ?omode:omode list -> 'k Otoky_type.t -> 'v Otoky_type.t -> string -> ('k, 'v) t
 
   val close : ('k, 'v) t -> unit
   val copy : ('k, 'v) t -> string -> unit
