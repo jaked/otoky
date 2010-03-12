@@ -4,3 +4,11 @@ description="type-safe access to Tokyo Cabinet"
 requires="tokyo_cabinet, type_desc"
 archive(byte) = "otoky.cma"
 archive(native) = "otoky.cmxa"
+
+package "bin_prot" (
+  description = "Bin_prot support for Otoky"
+  requires = "bin_prot"
+  archive(byte) = "otoky_bin_prot.cmo"
+  archive(native) = "otoky_bin_prot.cmx"
+  exists_if = "otoky_bin_prot.cmo"
+)

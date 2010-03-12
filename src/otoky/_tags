@@ -1,1 +1,3 @@
 <*.ml*> : pkg_tokyo_cabinet, pkg_type_desc
+<otoky_bin_prot.ml*> : pkg_bin_prot
+

@@ -41,6 +41,7 @@ get_path () {
 # defaults:
 
 set_defaults () {
+    enable_bin_prot=0
     bindir=`dirname $ocamlc`
     libdir=`ocamlc -where`
 }
@@ -55,7 +56,7 @@ exec_suffix=""
 # Option parsing
 
 # Which options exist? eoptions for enable/disable, woptions for with/without:
-eoptions=""
+eoptions="bin_prot"
 
 # Packages to include anyway:
 requires=""
@@ -184,6 +185,22 @@ else
 fi
 
 ######################################################################
+# Check that bin_prot is available:
+
+if [ $enable_bin_prot -gt 0 ]; then
+    printf "%s" "Checking for bin_prot... "
+    if check_library bin_prot; then
+        echo "found"
+    else
+        echo "not found"
+        echo "bin_prot is required for -enable-bin_prot."
+        echo "Try -disable-bin_prot, or get bin_prot from:"
+        echo "http://www.ocaml.info/home/ocaml_sources.html#toc11"
+        exit 1
+    fi
+fi
+
+######################################################################
 # Summary
 
 echo
@@ -214,6 +231,7 @@ BINDIR = $bindir
 # Where libraries are installed:
 LIBDIR = $libdir
 
+ENABLE_BIN_PROT = $enable_bin_prot
 _EOF_
 
 ######################################################################
