@@ -350,35 +350,73 @@ end
 
 module HDB =
 struct
+  module HDB_raw = HDB.Fun (Cstr_cstr) (Tclist_tclist)
+
   type ('k, 'v) t = {
     hdb : HDB.t;
     ktype : 'k Type.t;
     vtype : 'v Type.t;
   }
 
-  let open_ ?omode ktype vtype fn = failwith "unimplemented"
+  let open_ ?omode ktype vtype fn =
+    let hdb = HDB.new_ () in
+    HDB.open_ hdb ?omode fn;
+    let hash = Type.type_desc_hash ktype ^ Type.type_desc_hash vtype in
+    begin try
+      if hash <> HDB.get hdb Type.type_desc_hash_key
+      then begin
+        HDB.close hdb;
+        raise (Error (Einvalid, "open_", "bad type_desc hash"))
+      end
+    with Error (Enorec, _, _) ->
+      (* XXX maybe should check that this is a fresh db? *)
+      HDB.put hdb Type.type_desc_hash_key hash;
+    end;
+    {
+      hdb = hdb;
+      ktype = ktype;
+      vtype = vtype;
+    }
 
-  let close t = failwith "unimplemented"
-  let copy t fn = failwith "unimplemented"
-  let fsiz t = failwith "unimplemented"
-  let get t k = failwith "unimplemented"
-  let iterinit t = failwith "unimplemented"
-  let iternext t = failwith "unimplemented"
-  let optimize t ?bnum ?apow ?fpow ?opts () = failwith "unimplemented"
-  let out t k = failwith "unimplemented"
-  let path t = failwith "unimplemented"
-  let put t k v = failwith "unimplemented"
-  let putasync t k v = failwith "unimplemented"
-  let putkeep t k v = failwith "unimplemented"
-  let rnum t = failwith "unimplemented"
-  let setcache t cache = failwith "unimplemented"
-  let setdfunit t dfunit = failwith "unimplemented"
-  let setxmsiz t xmsiz = failwith "unimplemented"
-  let sync t = failwith "unimplemented"
-  let tranabort t = failwith "unimplemented"
-  let tranbegin t = failwith "unimplemented"
-  let trancommit t = failwith "unimplemented"
-  let tune t ?bnum ?apow ?fpow ?opts () = failwith "unimplemented"
-  let vanish t = failwith "unimplemented"
-  let vsiz t k = failwith "unimplemented"
+  let close t = HDB.close t.hdb
+  let copy t fn = HDB.copy t.hdb fn
+  let fsiz t = HDB.fsiz t.hdb
+
+  let get t k =
+    let cstr = HDB_raw.get t.hdb (Type.marshall_key t.ktype k "get") in
+    try
+      let v = t.vtype.Type.unmarshall cstr in
+      Cstr.del cstr;
+      v
+    with e -> Cstr.del cstr; raise e
+
+  let iterinit t = HDB.iterinit t.hdb
+
+  let iternext t =
+    let (k, klen) as cstr = HDB_raw.iternext t.hdb in
+    let cstr =
+      if Type.is_type_desc_hash_key k klen
+      then (Cstr.del cstr; HDB_raw.iternext t.hdb)
+      else cstr in
+    let k = t.ktype.Type.unmarshall cstr in
+    Cstr.del cstr;
+    k
+
+  let optimize t ?bnum ?apow ?fpow ?opts () = HDB.optimize t.hdb ?bnum ?apow ?fpow ?opts ()
+  let out t k = HDB_raw.out t.hdb (Type.marshall_key t.ktype k "out")
+  let path t = HDB.path t.hdb
+  let put t k v = HDB_raw.put t.hdb (Type.marshall_key t.ktype k "put") (t.vtype.Type.marshall v)
+  let putasync t k v = HDB_raw.putasync t.hdb (Type.marshall_key t.ktype k "putasync") (t.vtype.Type.marshall v)
+  let putkeep t k v = HDB_raw.putkeep t.hdb (Type.marshall_key t.ktype k "putkeep") (t.vtype.Type.marshall v)
+  let rnum t = HDB.rnum t.hdb
+  let setcache t rcnum = HDB.setcache t.hdb rcnum
+  let setdfunit t dfunit = HDB.setdfunit t.hdb dfunit
+  let setxmsiz t xmsiz = HDB.setxmsiz t.hdb xmsiz
+  let sync t = HDB.sync t.hdb
+  let tranabort t = HDB.tranabort t.hdb
+  let tranbegin t = HDB.tranbegin t.hdb
+  let trancommit t = HDB.trancommit t.hdb
+  let tune t ?bnum ?apow ?fpow ?opts () = HDB.tune t.hdb ?bnum ?apow ?fpow ?opts ()
+  let vanish t = HDB.vanish t.hdb
+  let vsiz t k = HDB_raw.vsiz t.hdb (Type.marshall_key t.ktype k "vsiz")
 end
