@@ -235,11 +235,15 @@ struct
     mutable width : int32;
   }
 
-  let type_desc_hash_key = 1L
+  let to_raw_key k func =
+    match k with
+      | _ when k = FDB.id_max || k = FDB.id_next -> k
+      | _ when k = FDB.id_min || k = FDB.id_prev || k = 0L->
+          (* we can't easily support min or prev since we take the 1L slot *)
+          raise (Error (Einvalid, func, "invalid operation"))
+      | _ -> Int64.succ k
 
-  let check_type_desc_hash_key k func =
-    if k = type_desc_hash_key
-    then raise (Error (Einvalid, func, "key is type_desc hash key"))
+  let of_raw_key k = Int64.pred k
 
   let marshall t v func =
     let (_, len) as vm = t.vtype.Type.marshall v in
@@ -257,14 +261,14 @@ struct
     let width = FDB.width fdb in
     let hash = Type.type_desc_hash vtype in
     begin try
-      if hash <> FDB.get fdb type_desc_hash_key
+      if hash <> FDB.get fdb 1L
       then begin
         FDB.close fdb;
         raise (Error (Einvalid, "open_", "bad type_desc hash"))
       end
     with Error (Enorec, _, _) ->
       (* XXX maybe should check that this is a fresh db? *)
-      FDB.put fdb type_desc_hash_key hash;
+      FDB.put fdb 1L hash;
     end;
     {
       fdb = fdb;
@@ -278,46 +282,45 @@ struct
   let fsiz t = FDB.fsiz t.fdb
 
   let get t k =
-    check_type_desc_hash_key k "get";
-    let cstr = FDB_raw.get t.fdb k in
+    let cstr = FDB_raw.get t.fdb (to_raw_key k "get") in
     try
       let v = t.vtype.Type.unmarshall cstr in
       Cstr.del cstr;
       v
     with e -> Cstr.del cstr; raise e
 
-  let iterinit t = FDB.iterinit t.fdb
+  let iterinit t =
+    FDB.iterinit t.fdb;
+    ignore (FDB.iternext t.fdb)
 
   let iternext t =
-    let r = FDB.iternext t.fdb in
-    if r = type_desc_hash_key
-    then FDB.iternext t.fdb
-    else r
+    of_raw_key (FDB.iternext t.fdb)
 
   let optimize t ?width ?limsiz () =
     (* XXX maybe should not be able to shrink the width. or we should check width of every record? *)
+    (* XXX also we shouldn't shrink to smaller than the type hash value *)
     FDB.optimize t.fdb ?width ?limsiz ();
     match width with
       | None -> ()
       | Some width -> t.width <- width
 
   let out t k =
-    check_type_desc_hash_key k "out";
-    FDB.out t.fdb k
+    FDB.out t.fdb (to_raw_key k "out")
 
   let path t = FDB.path t.fdb
 
   let put t k v =
-    check_type_desc_hash_key k "put";
-    FDB_raw.put t.fdb k (marshall t v "put")
+    FDB_raw.put t.fdb (to_raw_key k "put") (marshall t v "put")
 
   let putkeep t k v =
-    check_type_desc_hash_key k "put";
-    FDB_raw.putkeep t.fdb k (marshall t v "putkeep")
+    FDB_raw.putkeep t.fdb (to_raw_key k "putkeep") (marshall t v "putkeep")
 
   let range t ?lower ?upper ?max () =
-    (* XXX should remove the type_desc_hash_key *)
-    FDB.range t.fdb ?lower ?upper ?max ()
+    let lower = match lower with None -> Some 2L | Some k -> Some (to_raw_key k "range") in
+    let upper = match upper with None -> None | Some k -> Some (to_raw_key k "range") in
+    let range = FDB.range t.fdb ?lower ?upper ?max () in
+    Array.iteri (fun i k -> range.(i) <- of_raw_key k) range;
+    range
 
   let rnum t = FDB.rnum t.fdb
   let sync t = FDB.sync t.fdb
@@ -328,8 +331,7 @@ struct
   let vanish t = FDB.vanish t.fdb
 
   let vsiz t k =
-    check_type_desc_hash_key k "vsiz";
-    FDB.vsiz t.fdb k
+    FDB.vsiz t.fdb (to_raw_key k "vsiz")
 end
 
 module HDB =
