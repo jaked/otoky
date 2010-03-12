@@ -251,11 +251,17 @@ struct
     then raise (Error (Einvalid, func, "marshalled value exceeds width"));
     vm
 
+  let check_width vtype width =
+    if width < Int32.of_int (String.length (Type.type_desc_hash vtype))
+    then raise (Error (Einvalid, "open_", "width too small"))
+
   let open_ ?omode ?width vtype fn =
     let fdb = FDB.new_ () in
     begin match width with
       | None -> ()
-      | Some width -> FDB.tune fdb ~width ()
+      | Some width ->
+          check_width vtype width;
+          FDB.tune fdb ~width ()
     end;
     FDB.open_ fdb ?omode fn;
     let width = FDB.width fdb in
@@ -298,11 +304,12 @@ struct
 
   let optimize t ?width ?limsiz () =
     (* XXX maybe should not be able to shrink the width. or we should check width of every record? *)
-    (* XXX also we shouldn't shrink to smaller than the type hash value *)
     FDB.optimize t.fdb ?width ?limsiz ();
     match width with
       | None -> ()
-      | Some width -> t.width <- width
+      | Some width ->
+          check_width t.vtype width;
+          t.width <- width
 
   let out t k =
     FDB.out t.fdb (to_raw_key k "out")
@@ -327,7 +334,14 @@ struct
   let tranabort t = FDB.tranabort t.fdb
   let tranbegin t = FDB.tranbegin t.fdb
   let trancommit t = FDB.trancommit t.fdb
-  let tune t ?width ?limsiz () = FDB.tune t.fdb ?width ?limsiz ()
+
+  let tune t ?width ?limsiz () =
+    begin match width with
+      | None -> ()
+      | Some width -> check_width t.vtype width
+    end;
+    FDB.tune t.fdb ?width ?limsiz ()
+
   let vanish t = FDB.vanish t.fdb
 
   let vsiz t k =
