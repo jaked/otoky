@@ -13,3 +13,5 @@ val make :
   unmarshall : (Cstr.t -> 'a) ->
   compare : ('a -> 'a -> int) ->
   'a t
+
+val type_desc_hash : 'a t -> string

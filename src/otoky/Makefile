@@ -2,8 +2,10 @@
 
 FILES=\
 otoky.cma otoky.cmxa otoky.a \
-otoky_tc.mli otoky_tc.cmi \
 otoky_type.mli otoky_type.cmi \
+otoky_bdb.mli otoky_bdb.cmi \
+otoky_fdb.mli otoky_fdb.cmi \
+otoky_hdb.mli otoky_hdb.cmi \
 
 BFILES=$(addprefix _build/,$(FILES))
 

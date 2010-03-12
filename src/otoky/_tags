@@ -1,2 +1,1 @@
-<otoky_tc.ml*> : pkg_tokyo_cabinet, pkg_type_desc
-<otoky_type.ml*> : pkg_tokyo_cabinet, pkg_type_desc
+<*.ml*> : pkg_tokyo_cabinet, pkg_type_desc

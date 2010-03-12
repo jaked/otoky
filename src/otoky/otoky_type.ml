@@ -13,3 +13,5 @@ let make ~type_desc ~marshall ~unmarshall ~compare = {
   unmarshall = unmarshall;
   compare = compare;
 }
+
+let type_desc_hash t = Digest.string (Type_desc.to_string t.type_desc)
