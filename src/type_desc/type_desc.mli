@@ -1,6 +1,6 @@
 type 'a t
 
-val equal: 'a t -> 'a t -> bool
+val equal: 'a t -> 'b t -> bool
 
 val to_string : 'a t -> string
 
