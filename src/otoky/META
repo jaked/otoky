@@ -7,7 +7,7 @@ archive(native) = "otoky.cmxa"
 
 package "bin_prot" (
   description = "Bin_prot support for Otoky"
-  requires = "bin_prot"
+  requires = "otoky, bin_prot"
   archive(byte) = "otoky_bin_prot.cmo"
   archive(native) = "otoky_bin_prot.cmx"
   exists_if = "otoky_bin_prot.cmo"
