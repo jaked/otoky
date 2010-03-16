@@ -99,13 +99,7 @@ let type_desc bound_ids _loc t =
     | <:ctyp< $_$ $_$ >> as t ->
         let rec loop args = function
           | <:ctyp< $t2$ $t1$ >> ->
-              let arg =
-                match td t2 with
-                    (* an identifier or an application is already a Type_desc.t *)
-                  | <:expr< $id:_$ >>
-                  | <:expr< $_$ $_$ >> as e -> e
-                    (* everything else is a Type_desc.s *)
-                  | e -> <:expr< Type_desc.hide $e$ >> in
+              let arg = <:expr< Type_desc.hide $td t2$ >> in
               loop (arg :: args) t1
           | t ->
               match td t with
