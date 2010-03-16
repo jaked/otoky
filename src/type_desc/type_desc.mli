@@ -23,9 +23,9 @@ type s =
     | Option of s
     | Array of s
     | Hashtbl of s * s
-    | Var of string
-    | Bundle of (string * s) list
-    | Project of string * s
+    | Var of int
+    | Bundle of s list
+    | Project of int * s
 and pv_arm =
     | Tag of string * s option
     | Extend of s

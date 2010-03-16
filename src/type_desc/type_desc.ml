@@ -16,14 +16,12 @@
 
   For bundles of recursive types we replace occurrences of the type(s)
   being defined with Var so the description is finite. Vars refer to
-  names bound in a Bundle, and individual types in the bundle by
+  indexes of types in a Bundle, and individual types in the bundle by
   Project of a Bundle.
 
   XXX
   each type in a bundle depends on each other type, whether or not it refers to it
     could trim out the parts it doesn't refer to
-  type depends on its declared name in Bundle / Var
-    could use indexes instead (and depend on the order within a bundle)
 *)
 
 type s =
@@ -43,9 +41,9 @@ type s =
     | Option of s
     | Array of s
     | Hashtbl of s * s
-    | Var of string
-    | Bundle of (string * s) list
-    | Project of string * s
+    | Var of int
+    | Bundle of s list
+    | Project of int * s
 and pv_arm =
     | Tag of string * s option
     | Extend of s
@@ -104,15 +102,8 @@ let rec equal s1 s2 =
     | Hashtbl (s1, t1), Hashtbl (s2, t2) -> equal s1 s2 && equal t1 t2
 
     | Var v1, Var v2 -> v1 = v2
-
-    | Bundle types1, Bundle types2 ->
-        (* types are sorted by name at construction *)
-        List.for_all2
-          (fun (name1, s1) (name2, s2) -> name1 = name2 && equal s1 s2)
-          types1 types2
-
-    | Project (name1, s1), Project (name2, s2) ->
-        name1 = name2 && equal s1 s2
+    | Bundle types1, Bundle types2 -> List.for_all2 equal types1 types2
+    | Project (v1, s1), Project (v2, s2) -> v1 = v2 && equal s1 s2
 
     | _ -> false
 
@@ -166,12 +157,12 @@ let to_string s =
     | Option s -> add "(option "; to_s s; add ")"
     | Array s -> add "(array "; to_s s; add ")"
     | Hashtbl (k, v) -> add "(hashtbl "; to_s k; add " "; to_s v; add ")"
-    | Var s -> add "(var "; add s; add ")"
+    | Var v -> add "(var "; add (string_of_int v); add ")"
     | Bundle parts ->
         add "(bundle";
-        List.iter (fun (name, s) -> add " ("; add name; add " "; to_s s; add ")") parts;
-        add ")";
-    | Project (name, s) ->
-        add "(project "; add name; add " "; to_s s; add ")" in
+        List.iter (fun s -> add " "; to_s s) parts;
+        add ")"
+    | Project (v, s) ->
+        add "(project "; add (string_of_int v); add " "; to_s s; add ")" in
   to_s s;
   Buffer.contents b

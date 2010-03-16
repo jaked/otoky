@@ -88,8 +88,8 @@ let type_desc bound_ids _loc t =
     | <:ctyp< $id:id$ >> ->
         let ids = Ast.list_of_ident id [] in
         begin match List.rev ids with
-          | [ <:ident< $lid:id$ >> ] when List.mem id bound_ids ->
-              <:expr< Type_desc.Var $`str:id$ >>
+          | [ <:ident< $lid:id$ >> ] when List.mem_assoc id bound_ids ->
+              <:expr< Type_desc.Var $`int:List.assoc id bound_ids$ >>
           | <:ident< $lid:id$ >>::uids ->
               let ids = List.rev (<:ident< $lid:type_desc_ id$ >>::uids) in
               <:expr< Type_desc.show $id:<:ident< $list:ids$ >>$ >>
@@ -123,11 +123,13 @@ let type_desc bound_ids _loc t =
 let gen_str tds =
   let ctyps = Ast.list_of_ctyp tds [] in
 
-  (* all ids in type bundle *)
+  (* assoc of all ids in type bundle to their index in bundle *)
   let ids =
-    List.map
-      (function Ast.TyDcl (_, id, _, _, _) -> id | _ -> assert false)
-      ctyps in
+    let rec loop i = function
+      | [] -> []
+      | (Ast.TyDcl (_, id, _, _, _)) :: t -> (id, i) :: loop (i + 1) t
+      | _ -> assert false in
+    loop 0 ctyps in
 
   (* individual type descriptions *)
   let type_descs =
@@ -139,7 +141,6 @@ let gen_str tds =
         | Ast.TyDcl _ -> failwith "type constraints not supported"
         | _ -> assert false)
       ctyps in
-  let type_descs = List.sort (fun (id1, _, _) (id2, _, _) -> compare id1 id2) type_descs in
 
   (* all vars in type bundle *)
   let vars =
@@ -157,7 +158,7 @@ let gen_str tds =
     <:str_item<
       let $lid:bundle_id$ =
         $funs_ids vars <:expr<
-          Type_desc.Bundle ($list_of_exprs (List.map (fun (id, _, s) -> <:expr< $`str:id$, $s$ >>) type_descs)$)
+          Type_desc.Bundle ($list_of_exprs (List.map (fun (_, _, s) -> s) type_descs)$)
         >>$
     >> in
 
@@ -176,7 +177,7 @@ let gen_str tds =
           let $lid:type_desc_ id$ =
             ($funs_ids
                 vars'
-                <:expr< Type_desc.hide (Type_desc.Project ($`str:id$, $apps <:expr< $lid:bundle_id$ >> args$)) >>$ :
+                <:expr< Type_desc.hide (Type_desc.Project ($`int:List.assoc id ids$, $apps <:expr< $lid:bundle_id$ >> args$)) >>$ :
               $arrows targs ret$)
         >>)
       type_descs in
