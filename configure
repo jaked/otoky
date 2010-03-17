@@ -42,8 +42,13 @@ get_path () {
 
 set_defaults () {
     enable_bin_prot=0
+    enable_tt=0
     bindir=`dirname $ocamlc`
     libdir=`ocamlc -where`
+    tc_include_dir=''
+    tc_lib_dir=''
+    tt_include_dir=''
+    tt_lib_dir=''
 }
 
 ocamlc=`get_path ocamlc`
@@ -56,7 +61,7 @@ exec_suffix=""
 # Option parsing
 
 # Which options exist? eoptions for enable/disable, woptions for with/without:
-eoptions="bin_prot"
+eoptions="bin_prot tt"
 
 # Packages to include anyway:
 requires=""
@@ -105,6 +110,18 @@ _EOF_
 -libdir dir
         Install libraries into this directory (default same as ocamlc -where)
 
+-tc-include dir
+        Tokyo Cabinet includes directory
+
+-tc-lib dir
+        Tokyo Cabinet libs directory
+
+-tt-include dir
+        Tokyo Tyrant includes directory (for -enable-tt)
+
+-tt-lib dir
+        Tokyo Tyrant libs directory (for -enable-tt)
+
 Defaults are:
 
 _EOF_
@@ -149,6 +166,26 @@ while [ "$#" -gt 0 ]; do
                         shift
                         shift
                         ;;
+                -tc-include)
+                        tc_include_dir="$2"
+                        shift
+                        shift
+                        ;;
+                -tc-lib)
+                        tc_lib_dir="$2"
+                        shift
+                        shift
+                        ;;
+                -tt-include)
+                        tt_include_dir="$2"
+                        shift
+                        shift
+                        ;;
+                -tt-lib)
+                        tt_lib_dir="$2"
+                        shift
+                        shift
+                        ;;
 		-version)
 			echo "$version"
 			exit 0
@@ -157,6 +194,84 @@ while [ "$#" -gt 0 ]; do
 			usage
 	esac
 done
+
+
+
+######################################################################
+# Check for Tokyo Cabinet
+
+printf "%s" "Checking for Tokyo Cabinet... "
+tc_include="not found"
+tc_lib="not found"
+for dir in \
+    $tc_include_dir \
+    /usr/local/include \
+    /usr/include \
+    ; \
+do
+    if [ -f $dir/tcadb.h ]; then
+        tc_include=$dir
+        break
+    fi
+done
+for dir in \
+    $tc_lib_dir \
+    /usr/local/lib \
+    /usr/lib \
+    ; \
+do
+    if [ -f $dir/libtokyocabinet.a ]; then
+        tc_lib=$dir
+        break
+    fi
+done
+if [ "$tc_include" = "not found" ] || [ "$tc_lib" = "not found" ]
+then
+  echo "not found"
+  echo "Install Tokyo Cabinet from http://1978th.net/tokyocabinet/"
+  echo "or try -tc_include / -tc_lib"
+else
+  echo "found"
+fi
+
+######################################################################
+# Check for Tokyo Tyrant
+
+if [ $enable_tt -gt 0 ]; then
+    printf "%s" "Checking for Tokyo Tyrant... "
+    tt_include="not found"
+    tt_lib="not found"
+    for dir in \
+        $tt_include_dir \
+        /usr/local/include \
+        /usr/include \
+        ; \
+    do
+        if [ -f $dir/tcrdb.h ]; then
+            tt_include=$dir
+            break
+        fi
+    done
+    for dir in \
+        $tt_lib_dir \
+        /usr/local/lib \
+        /usr/lib \
+        ; \
+    do
+        if [ -f $dir/libtokyotyrant.a ]; then
+            tt_lib=$dir
+            break
+        fi
+    done
+    if [ "$tt_include" = "not found" ] || [ "$tt_lib" = "not found" ]
+    then
+      echo "not found"
+      echo "Install Tokyo Tyrant from http://1978th.net/tokyotyrant/"
+      echo "or try -tt_include / -tt_lib"
+    else
+      echo "found"
+    fi
+fi
 
 ######################################################################
 # Check ocamlfind
@@ -208,7 +323,11 @@ echo "Effective options:"
 print_options
 echo
 
-pkglist="tokyo_common tokyo_cabinet tokyo_tyrant type_desc otoky"
+pkglist="tokyo_common tokyo_cabinet type_desc otoky"
+
+if [ $enable_tt -gt 0 ]; then
+    pkglist="$pkglist tokyo_tyrant"
+fi
 
 ######################################################################
 # Write Makefile.conf
@@ -232,6 +351,12 @@ BINDIR = $bindir
 LIBDIR = $libdir
 
 ENABLE_BIN_PROT = $enable_bin_prot
+ENABLE_TT = $enable_tt
+
+TC_INCLUDE=$tc_include
+TC_LIBDIR=$tc_lib
+TT_INCLUDE=$tt_include
+TT_LIBDIR=$tt_lib
 _EOF_
 
 ######################################################################

@@ -2,11 +2,9 @@
 
 # based on the Cryptokit Makefile
 
-TOKYO_INCLUDE=/usr/local/include
-TOKYO_LIBDIR=/usr/local/lib
-TOKYO_LIBS=-ltokyotyrant
+TT_LIBS=-ltokyotyrant
 
-CFLAGS=-O -I$(TOKYO_INCLUDE)
+CFLAGS=-O -I$(TT_INCLUDE)
 
 COMPFLAGS=-package tokyo_common
 
@@ -30,13 +28,13 @@ all: libtokyo_tyrant.a tokyo_tyrant.cmi tokyo_tyrant.cma tokyo_tyrant.cmxa
 	ocamlfind install -ldconf ../../stage/ld.conf -destdir ../../stage $(PACKAGE) $(INSTALL)
 
 libtokyo_tyrant.a: $(C_OBJS)
-	$(MKLIB) -o tokyo_tyrant $(C_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
+	$(MKLIB) -o tokyo_tyrant $(C_OBJS) -L$(TT_LIBDIR) $(TT_LIBS)
 
 tokyo_tyrant.cma: $(CAML_OBJS)
-	$(MKLIB) -o tokyo_tyrant $(CAML_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
+	$(MKLIB) -o tokyo_tyrant $(CAML_OBJS) -L$(TT_LIBDIR) $(TT_LIBS)
 
 tokyo_tyrant.cmxa: $(CAML_OBJS:.cmo=.cmx)
-	$(MKLIB) -o tokyo_tyrant $(CAML_OBJS:.cmo=.cmx) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
+	$(MKLIB) -o tokyo_tyrant $(CAML_OBJS:.cmo=.cmx) -L$(TT_LIBDIR) $(TT_LIBS)
 
 install:
 	ocamlfind install $(PACKAGE) $(INSTALL)

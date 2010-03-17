@@ -2,11 +2,9 @@
 
 # based on the Cryptokit Makefile
 
-TOKYO_INCLUDE=/usr/local/include
-TOKYO_LIBDIR=/usr/local/lib
-TOKYO_LIBS=-ltokyocabinet
+TC_LIBS=-ltokyocabinet
 
-CFLAGS=-O -I$(TOKYO_INCLUDE)
+CFLAGS=-O -I$(TC_INCLUDE)
 
 COMPFLAGS=-package tokyo_common
 
@@ -30,13 +28,13 @@ all: libtokyo_cabinet.a tokyo_cabinet.cmi tokyo_cabinet.cma tokyo_cabinet.cmxa
 	ocamlfind install -ldconf ../../stage/ld.conf -destdir ../../stage $(PACKAGE) $(INSTALL)
 
 libtokyo_cabinet.a: $(C_OBJS)
-	$(MKLIB) -o tokyo_cabinet $(C_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
+	$(MKLIB) -o tokyo_cabinet $(C_OBJS) -L$(TC_LIBDIR) $(TC_LIBS)
 
 tokyo_cabinet.cma: $(CAML_OBJS)
-	$(MKLIB) -o tokyo_cabinet $(CAML_OBJS) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
+	$(MKLIB) -o tokyo_cabinet $(CAML_OBJS) -L$(TC_LIBDIR) $(TC_LIBS)
 
 tokyo_cabinet.cmxa: $(CAML_OBJS:.cmo=.cmx)
-	$(MKLIB) -o tokyo_cabinet $(CAML_OBJS:.cmo=.cmx) -L$(TOKYO_LIBDIR) $(TOKYO_LIBS)
+	$(MKLIB) -o tokyo_cabinet $(CAML_OBJS:.cmo=.cmx) -L$(TC_LIBDIR) $(TC_LIBS)
 
 install:
 	ocamlfind install $(PACKAGE) $(INSTALL)
