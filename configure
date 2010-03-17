@@ -207,6 +207,7 @@ for dir in \
     $tc_include_dir \
     /usr/local/include \
     /usr/include \
+    /opt/local/include \
     ; \
 do
     if [ -f $dir/tcadb.h ]; then
@@ -218,6 +219,7 @@ for dir in \
     $tc_lib_dir \
     /usr/local/lib \
     /usr/lib \
+    /opt/local/lib \
     ; \
 do
     if [ -f $dir/libtokyocabinet.a ]; then
