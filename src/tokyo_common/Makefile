@@ -2,8 +2,6 @@
 
 # based on the Cryptokit Makefile
 
-TC_INCLUDE=/usr/local/include
-TC_LIBDIR=/usr/local/lib
 TC_LIBS=-ltokyocabinet
 
 CFLAGS=-O -I$(TC_INCLUDE)
