@@ -9,7 +9,7 @@ let type_desc_ id = "type_desc_" ^ id
 let arrows ts t = List.fold_right (fun t a -> <:ctyp< $t$ -> $a$ >>)  ts t
 
 (* tapps t1..tn t => (t1, .., tn) t *)
-let tapps ts t = List.fold_left (fun a t -> <:ctyp< $t$ $a$ >>) t ts
+let tapps ts t = List.fold_left (fun a t -> <:ctyp< $a$ $t$ >>) t ts
 
 (* funs p1..pn e => fun p1 .. pn -> e *)
 let funs ps e = List.fold_right (fun p e -> <:expr< fun $p$ -> $e$ >>) ps e
@@ -21,7 +21,7 @@ let apps e es = List.fold_left (fun e e' -> <:expr< $e$ $e'$ >>) e es
 
 let rec list_of_exprs = function
   | [] -> <:expr< [] >>
-  | h::t -> <:expr< $h$ :: $list_of_exprs t$ >>
+  | h::t -> <:expr< [ $h$ :: $list_of_exprs t$ ] >>
 
 let next_bundle_id =
   let bundle = ref (-1) in
@@ -49,7 +49,7 @@ let type_desc bound_ids _loc t =
           List.map
             (function
               | <:ctyp< $lid:id$ : mutable $t$ >>
-              | <:ctyp< $lid:id$ : $t$ >> -> <:expr< $`str:id$, $td t$ >>
+              | <:ctyp< $lid:id$ : $t$ >> -> <:expr< ($`str:id$, $td t$) >>
               | _ -> assert false)
             (Ast.list_of_ctyp t []) in
         <:expr< Type_desc.Record ($list_of_exprs fields$) >>
@@ -58,10 +58,10 @@ let type_desc bound_ids _loc t =
         let arms =
           List.map
             (function
-              | <:ctyp< $uid:id$ >> -> <:expr< $`str:id$, [] >>
+              | <:ctyp< $uid:id$ >> -> <:expr< ($`str:id$, []) >>
               | <:ctyp< $uid:id$ of $t$ >> ->
                   let parts = List.map td (Ast.list_of_ctyp t []) in
-                  <:expr< $`str:id$, ($list_of_exprs parts$) >>
+                  <:expr< ($`str:id$, $list_of_exprs parts$) >>
               | _ -> assert false)
             (Ast.list_of_ctyp t []) in
         <:expr< Type_desc.Sum ($list_of_exprs arms$) >>
@@ -77,11 +77,11 @@ let type_desc bound_ids _loc t =
           (Ast.list_of_ctyp t []) in
         <:expr< Type_desc.Polyvar ($list_of_exprs arms$) >>
 
-    | <:ctyp< $t$ list >> -> <:expr< Type_desc.List $td t$ >>
-    | <:ctyp< $t$ option >> -> <:expr< Type_desc.Option $td t$ >>
-    | <:ctyp< $t$ array >> -> <:expr< Type_desc.Array $td t$ >>
-    | <:ctyp< ($t1$, $t2$) Hashtbl.t >> -> <:expr< Type_desc.Hashtbl ($td t1$, $td t2$) >>
-    | <:ctyp< $t$ ref >> -> td t
+    | <:ctyp< list $t$ >> -> <:expr< Type_desc.List $td t$ >>
+    | <:ctyp< option $t$ >> -> <:expr< Type_desc.Option $td t$ >>
+    | <:ctyp< array $t$ >> -> <:expr< Type_desc.Array $td t$ >>
+    | <:ctyp< Hashtblt.t $t1$ $t2$ >> -> <:expr< Type_desc.Hashtbl ($td t1$, $td t2$) >>
+    | <:ctyp< ref $t$ >> -> td t
 
     | <:ctyp< '$v$ >> -> <:expr< $lid:v$ >>
 
@@ -98,7 +98,7 @@ let type_desc bound_ids _loc t =
 
     | <:ctyp< $_$ $_$ >> as t ->
         let rec loop args = function
-          | <:ctyp< $t2$ $t1$ >> ->
+          | <:ctyp< $t1$ $t2$ >> ->
               let arg = <:expr< Type_desc.hide $td t2$ >> in
               loop (arg :: args) t1
           | t ->
@@ -150,7 +150,7 @@ let gen_str tds =
   let bundle_id = next_bundle_id () in
   let bundle =
     <:str_item<
-      let $lid:bundle_id$ =
+      value $lid:bundle_id$ =
         $funs_ids vars <:expr<
           Type_desc.Bundle ($list_of_exprs (List.map (fun (_, _, s) -> s) type_descs)$)
         >>$
@@ -165,10 +165,10 @@ let gen_str tds =
             (fun v -> if List.mem v vars' then <:expr< Type_desc.show $lid:v$ >> else <:expr< Type_desc.Unit >>)
             vars in
         let t = tapps (List.map (fun v -> <:ctyp< '$v$ >>) vars') <:ctyp< $lid:id$ >> in
-        let ret = <:ctyp< $t$ Type_desc.t >> in
-        let targs = List.map (fun v -> <:ctyp< '$v$ Type_desc.t >>) vars' in
+        let ret = <:ctyp< Type_desc.t $t$ >> in
+        let targs = List.map (fun v -> <:ctyp< Type_desc.t '$v$ >>) vars' in
         <:str_item<
-          let $lid:type_desc_ id$ =
+          value $lid:type_desc_ id$ =
             ($funs_ids
                 vars'
                 <:expr< Type_desc.hide (Type_desc.Project ($`int:List.assoc id ids$, $apps <:expr< $lid:bundle_id$ >> args$)) >>$ :
@@ -177,13 +177,13 @@ let gen_str tds =
       type_descs in
 
   let _loc = Ast.loc_of_ctyp tds in
-  <:str_item< $bundle$ ;; $list:projects$ >>
+  <:str_item< $bundle$ ; $list:projects$ >>
 
 let sig_item _loc id vars =
   let t = tapps vars <:ctyp< $lid:id$ >> in
-  let ret = <:ctyp< $t$ Type_desc.t >> in
-  let args = List.map (fun v -> <:ctyp< $v$ Type_desc.t >>) vars in
-  <:sig_item< val $lid:type_desc_ id$ : $arrows args ret$ >>
+  let ret = <:ctyp< Type_desc.t $t$ >> in
+  let args = List.map (fun v -> <:ctyp< Type_desc.t $v$ >>) vars in
+  <:sig_item< value $lid:type_desc_ id$ : $arrows args ret$ >>
 
 let gen_sig tds =
   let sig_items =

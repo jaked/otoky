@@ -1,1 +1,1 @@
-<pa_type_desc.ml> : syntax_camlp4o,pkg_camlp4.quotations.o,pkg_type-conv
+<pa_type_desc.ml> : syntax_camlp4o,pkg_camlp4.quotations.r,pkg_type-conv
